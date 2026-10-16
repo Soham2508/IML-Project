@@ -116,14 +116,8 @@ results/week1/
 - Numerical features are normalized to `[0, 1]` using the training fold min/max values only, then applied to the corresponding test fold.
 - The current dataset pair is all-numeric; the code keeps metadata for future mixed-type datasets.
 
-## Notes for Week 2
-
-The project includes a custom k-NN module scaffold and distance metric implementations, but the full Week 2 evaluation grid is intentionally left as a follow-up implementation. The assignment-mandated grid includes `k` values `3, 5, 7`, four distance metrics (`euclidean`, `manhattan`, `canberra`, `heom`), two voting schemes (`majority_class`, `inverse_distance_weighted`), and four retention policies (`never_retain`, `always_retain`, `different_class`, `oblivion_by_goodness`).
-
 ## Quality checks
 
 ```powershell
 python -m unittest discover -s tests -v
 ```
-
-This repository is configured to keep module boundaries focused on data loading, preprocessing, model logic, and evaluation orchestration rather than mixing everything into one file.
