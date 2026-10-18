@@ -32,14 +32,22 @@ def apply_retention_policy(
     goodness falls below the baseline, without appending every query to the case base.
     """
     if policy == "never_retain":
-        return list(case_base), list(labels), RetentionSummary(policy, len(case_base), [], [])
+        return (
+            list(case_base),
+            list(labels),
+            RetentionSummary(policy, len(case_base), [], []),
+        )
 
     if policy == "always_retain":
         case_base = list(case_base)
         labels = list(labels)
         case_base.append(query_vector)
         labels.append(true_label)
-        return case_base, labels, RetentionSummary(policy, len(case_base), [len(case_base) - 1], [])
+        return (
+            case_base,
+            labels,
+            RetentionSummary(policy, len(case_base), [len(case_base) - 1], []),
+        )
 
     if policy == "different_class":
         if predicted_label != true_label:
@@ -47,8 +55,16 @@ def apply_retention_policy(
             labels = list(labels)
             case_base.append(query_vector)
             labels.append(true_label)
-            return case_base, labels, RetentionSummary(policy, len(case_base), [len(case_base) - 1], [])
-        return list(case_base), list(labels), RetentionSummary(policy, len(case_base), [], [])
+            return (
+                case_base,
+                labels,
+                RetentionSummary(policy, len(case_base), [len(case_base) - 1], []),
+            )
+        return (
+            list(case_base),
+            list(labels),
+            RetentionSummary(policy, len(case_base), [], []),
+        )
 
     if policy == "oblivion_by_goodness":
         if neighbors is None:
@@ -75,6 +91,10 @@ def apply_retention_policy(
                 case_base.pop(idx)
                 labels.pop(idx)
                 removed_cases.append(idx)
-        return case_base, labels, RetentionSummary(policy, len(case_base), updated_cases, removed_cases)
+        return (
+            case_base,
+            labels,
+            RetentionSummary(policy, len(case_base), updated_cases, removed_cases),
+        )
 
     raise ValueError(f"Unsupported retention policy: {policy}")

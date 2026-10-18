@@ -20,7 +20,13 @@ class Preprocessor:
     modes_: dict[str, object]
 
     @classmethod
-    def fit(cls, train_df: pd.DataFrame, feature_names: Iterable[str], feature_types: Iterable[str], target_name: str) -> "Preprocessor":
+    def fit(
+        cls,
+        train_df: pd.DataFrame,
+        feature_names: Iterable[str],
+        feature_types: Iterable[str],
+        target_name: str,
+    ) -> "Preprocessor":
         names = list(feature_names)
         types = [str(item).lower() for item in feature_types]
         if len(names) != len(types):
@@ -91,7 +97,9 @@ class Preprocessor:
                         transformed[name] = (series - minimum) / (maximum - minimum)
                 else:
                     transformed[name] = series
-                transformed[name] = pd.to_numeric(transformed[name], errors="coerce").fillna(0.0)
+                transformed[name] = pd.to_numeric(
+                    transformed[name], errors="coerce"
+                ).fillna(0.0)
             elif feature_type in {"nominal", "string"}:
                 if name not in transformed.columns:
                     continue
@@ -103,7 +111,13 @@ class Preprocessor:
         return transformed
 
 
-def fit_and_transform(train_df: pd.DataFrame, test_df: pd.DataFrame, feature_names: list[str], feature_types: list[str], target_name: str) -> tuple[pd.DataFrame, pd.DataFrame, Preprocessor]:
+def fit_and_transform(
+    train_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    feature_names: list[str],
+    feature_types: list[str],
+    target_name: str,
+) -> tuple[pd.DataFrame, pd.DataFrame, Preprocessor]:
     preprocessor = Preprocessor.fit(train_df, feature_names, feature_types, target_name)
     transformed_train = preprocessor.transform(train_df)
     transformed_test = preprocessor.transform(test_df)

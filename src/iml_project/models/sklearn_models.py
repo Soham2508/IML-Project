@@ -25,7 +25,11 @@ def svmAlgorithm(
     predict_start = time.perf_counter()
     predictions = model.predict(X_test)
     predict_time = time.perf_counter() - predict_start
-    return predictions, {"fit_time": fit_time, "prediction_time": predict_time, "model": model}
+    return predictions, {
+        "fit_time": fit_time,
+        "prediction_time": predict_time,
+        "model": model,
+    }
 
 
 def rfAlgorithm(
@@ -38,11 +42,17 @@ def rfAlgorithm(
 ) -> tuple[np.ndarray, dict[str, float]]:
     """Train and evaluate a scikit-learn RandomForestClassifier configured for the assignment grid."""
     start = time.perf_counter()
-    model = RandomForestClassifier(n_estimators=n_estimators, criterion=criterion, random_state=random_state)
+    model = RandomForestClassifier(
+        n_estimators=n_estimators, criterion=criterion, random_state=random_state
+    )
     model.fit(X_train, y_train)
     fit_time = time.perf_counter() - start
 
     predict_start = time.perf_counter()
     predictions = model.predict(X_test)
     predict_time = time.perf_counter() - predict_start
-    return predictions, {"fit_time": fit_time, "prediction_time": predict_time, "model": model}
+    return predictions, {
+        "fit_time": fit_time,
+        "prediction_time": predict_time,
+        "model": model,
+    }

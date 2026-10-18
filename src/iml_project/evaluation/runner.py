@@ -12,14 +12,35 @@ from ..evaluation.metrics import accuracy_score
 from ..models.sklearn_models import rfAlgorithm, svmAlgorithm
 
 
-def _prepare_dataframe(train_df: pd.DataFrame, test_df: pd.DataFrame, feature_names: list[str], feature_types: list[str], target_name: str) -> tuple[pd.DataFrame, pd.DataFrame]:
-    train_scaled, test_scaled, _ = fit_and_transform(train_df, test_df, feature_names, feature_types, target_name)
-    return train_scaled.drop(columns=[target_name]), test_scaled.drop(columns=[target_name]),
+def _prepare_dataframe(
+    train_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    feature_names: list[str],
+    feature_types: list[str],
+    target_name: str,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    train_scaled, test_scaled, _ = fit_and_transform(
+        train_df, test_df, feature_names, feature_types, target_name
+    )
+    return (
+        train_scaled.drop(columns=[target_name]),
+        test_scaled.drop(columns=[target_name]),
+    )
 
 
-def _evaluate_model_config(dataset_name: str, fold_index: int, config_name: str, params: dict[str, object], data_root: str | Path) -> dict[str, object]:
-    train_df, test_df, feature_names, feature_types, target_name = load_dataset_fold(dataset_name, fold_index, data_root)
-    train_scaled, test_scaled, _ = fit_and_transform(train_df, test_df, feature_names, feature_types, target_name)
+def _evaluate_model_config(
+    dataset_name: str,
+    fold_index: int,
+    config_name: str,
+    params: dict[str, object],
+    data_root: str | Path,
+) -> dict[str, object]:
+    train_df, test_df, feature_names, feature_types, target_name = load_dataset_fold(
+        dataset_name, fold_index, data_root
+    )
+    train_scaled, test_scaled, _ = fit_and_transform(
+        train_df, test_df, feature_names, feature_types, target_name
+    )
 
     X_train = train_scaled.drop(columns=[target_name]).to_numpy(dtype=float)
     X_test = test_scaled.drop(columns=[target_name]).to_numpy(dtype=float)
@@ -27,9 +48,23 @@ def _evaluate_model_config(dataset_name: str, fold_index: int, config_name: str,
     y_test = test_scaled[target_name].to_numpy()
 
     if config_name == "svm":
-        predictions, timings = svmAlgorithm(X_train, y_train, X_test, kernel=params["kernel"], C=float(params["C"]), gamma=params.get("gamma", "scale"))
+        predictions, timings = svmAlgorithm(
+            X_train,
+            y_train,
+            X_test,
+            kernel=params["kernel"],
+            C=float(params["C"]),
+            gamma=params.get("gamma", "scale"),
+        )
     elif config_name == "random_forest":
-        predictions, timings = rfAlgorithm(X_train, y_train, X_test, n_estimators=int(params["n_estimators"]), criterion=params["criterion"], random_state=int(params.get("random_state", 42)))
+        predictions, timings = rfAlgorithm(
+            X_train,
+            y_train,
+            X_test,
+            n_estimators=int(params["n_estimators"]),
+            criterion=params["criterion"],
+            random_state=int(params.get("random_state", 42)),
+        )
     else:
         raise ValueError(f"Unsupported config name: {config_name}")
 
@@ -46,11 +81,15 @@ def _evaluate_model_config(dataset_name: str, fold_index: int, config_name: str,
         "accuracy": accuracy,
         "fit_time": float(timings["fit_time"]),
         "prediction_time": float(timings["prediction_time"]),
-        "average_prediction_time": float(timings["prediction_time"] / len(y_test)) if len(y_test) else 0.0,
+        "average_prediction_time": float(timings["prediction_time"] / len(y_test))
+        if len(y_test)
+        else 0.0,
     }
 
 
-def run_week1_experiments(data_root: str | Path = "data", output_dir: str | Path = "results/week1") -> dict[str, pd.DataFrame]:
+def run_week1_experiments(
+    data_root: str | Path = "data", output_dir: str | Path = "results/week1"
+) -> dict[str, pd.DataFrame]:
     """Run the Week 1 SVM and Random Forest experiments and save CSV results."""
     root = Path(data_root)
     output_path = Path(output_dir)
@@ -80,10 +119,14 @@ def run_week1_experiments(data_root: str | Path = "data", output_dir: str | Path
     for dataset_name, folds in dataset_map.items():
         for fold in folds:
             for config in svm_configs:
-                row = _evaluate_model_config(dataset_name, fold.fold_index, "svm", config, root)
+                row = _evaluate_model_config(
+                    dataset_name, fold.fold_index, "svm", config, root
+                )
                 svm_rows.append(row)
             for config in rf_configs:
-                row = _evaluate_model_config(dataset_name, fold.fold_index, "random_forest", config, root)
+                row = _evaluate_model_config(
+                    dataset_name, fold.fold_index, "random_forest", config, root
+                )
                 rf_rows.append(row)
 
     svm_df = pd.DataFrame(svm_rows)
@@ -99,7 +142,9 @@ def run_week1_experiments(data_root: str | Path = "data", output_dir: str | Path
             mean_prediction_time=("average_prediction_time", "mean"),
             mean_fit_time=("fit_time", "mean"),
         )
-        .sort_values(["dataset", "model_name", "mean_accuracy"], ascending=[True, True, False])
+        .sort_values(
+            ["dataset", "model_name", "mean_accuracy"], ascending=[True, True, False]
+        )
     )
 
     rf_summary = (
@@ -112,7 +157,9 @@ def run_week1_experiments(data_root: str | Path = "data", output_dir: str | Path
             mean_prediction_time=("average_prediction_time", "mean"),
             mean_fit_time=("fit_time", "mean"),
         )
-        .sort_values(["dataset", "model_name", "mean_accuracy"], ascending=[True, True, False])
+        .sort_values(
+            ["dataset", "model_name", "mean_accuracy"], ascending=[True, True, False]
+        )
     )
 
     svm_path = output_path / "svm_fold_results.csv"
@@ -125,7 +172,12 @@ def run_week1_experiments(data_root: str | Path = "data", output_dir: str | Path
     rf_df.to_csv(rf_path, index=False)
     rf_summary.to_csv(rf_summary_path, index=False)
 
-    return {"svm_fold": svm_df, "svm_summary": svm_summary, "random_forest_fold": rf_df, "random_forest_summary": rf_summary}
+    return {
+        "svm_fold": svm_df,
+        "svm_summary": svm_summary,
+        "random_forest_fold": rf_df,
+        "random_forest_summary": rf_summary,
+    }
 
 
 def validate_data_files(data_root: str | Path = "data") -> dict[str, list[str]]:

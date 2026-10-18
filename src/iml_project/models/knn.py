@@ -8,11 +8,17 @@ import numpy as np
 from .distance_metrics import compute_distance
 
 
-def _choose_closest_neighbor_class(neighbor_classes: list[Any], neighbor_distances: list[float]) -> Any:
+def _choose_closest_neighbor_class(
+    neighbor_classes: list[Any], neighbor_distances: list[float]
+) -> Any:
     if not neighbor_classes:
         raise ValueError("No neighboring classes available for tie-breaking.")
     min_distance = min(neighbor_distances)
-    closest = [cls for cls, distance in zip(neighbor_classes, neighbor_distances) if np.isclose(distance, min_distance)]
+    closest = [
+        cls
+        for cls, distance in zip(neighbor_classes, neighbor_distances)
+        if np.isclose(distance, min_distance)
+    ]
     if len(set(closest)) == 1:
         return closest[0]
     return sorted(set(closest), key=lambda item: str(item))[0]
@@ -25,10 +31,16 @@ def _vote_majority(neighbor_classes: list[Any]) -> Any:
     return sorted(winners, key=lambda item: str(item))[0]
 
 
-def _vote_inverse_distance(neighbor_classes: list[Any], neighbor_distances: list[float]) -> Any:
+def _vote_inverse_distance(
+    neighbor_classes: list[Any], neighbor_distances: list[float]
+) -> Any:
     zero_distance_mask = np.isclose(neighbor_distances, 0.0)
     if np.any(zero_distance_mask):
-        zero_labels = [label for label, is_zero in zip(neighbor_classes, zero_distance_mask) if is_zero]
+        zero_labels = [
+            label
+            for label, is_zero in zip(neighbor_classes, zero_distance_mask)
+            if is_zero
+        ]
         if zero_labels:
             counts = Counter(zero_labels)
             max_count = max(counts.values())
@@ -104,7 +116,9 @@ def kNNAlgorithm(
             continue
         if retention_policy == "always_retain":
             case_base.append(np.asarray(query, dtype=float).copy())
-            labels.append(query[-1] if isinstance(query, np.ndarray) and query.size else None)
+            labels.append(
+                query[-1] if isinstance(query, np.ndarray) and query.size else None
+            )
             continue
 
         # The run-time retention policies here are intentionally kept as scaffolding for the full Week 2 implementation.
