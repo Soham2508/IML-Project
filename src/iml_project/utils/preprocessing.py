@@ -26,7 +26,7 @@ class Preprocessor:
         feature_names: Iterable[str],
         feature_types: Iterable[str],
         target_name: str,
-    ) -> "Preprocessor":
+    ) -> Preprocessor:
         names = list(feature_names)
         types = [str(item).lower() for item in feature_types]
         if len(names) != len(types):
