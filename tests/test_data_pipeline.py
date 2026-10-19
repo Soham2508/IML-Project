@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import unittest
-import numpy as np
+
 import pandas as pd
 
 from iml_project.utils.arff_reader import (
@@ -10,7 +10,6 @@ from iml_project.utils.arff_reader import (
     resolve_dataset_dir,
     validate_fold_pairs,
 )
-from iml_project.utils.folds import get_dataset_fold_map, get_dataset_names
 from iml_project.utils.preprocessing import (
     Preprocessor,
     fit_and_transform,

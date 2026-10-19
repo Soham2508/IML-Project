@@ -1,21 +1,19 @@
 from __future__ import annotations
 
 import unittest
+
 import numpy as np
 
-from iml_project.core.knn import KNNClassifier, kNNAlgorithm
+from iml_project.core.knn import KNNClassifier
 from iml_project.core.retention import (
     AlwaysRetain,
-    CaseBase,
     DifferentClass,
     NeverRetain,
     OblivionByGoodness,
-    get_retention_policy,
 )
 from iml_project.core.voting import (
     InverseDistanceWeightedVoting,
     MajorityVoting,
-    get_voting_strategy,
 )
 from iml_project.utils.distance_metrics import (
     CanberraDistance,

@@ -3,9 +3,11 @@ from __future__ import annotations
 import time
 from collections.abc import Sequence
 from typing import Any
+
 import numpy as np
 
 from iml_project.utils.distance_metrics import DistanceMetric, IVDMDistance
+
 from .retention import CaseBase, NeverRetain, RetentionPolicy
 from .voting import MajorityVoting, VotingStrategy
 

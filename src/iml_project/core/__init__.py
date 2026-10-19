@@ -18,17 +18,17 @@ from .voting import (
 )
 
 __all__ = [
-    "KNNClassifier",
-    "kNNAlgorithm",
-    "CaseBase",
-    "RetentionPolicy",
-    "NeverRetain",
     "AlwaysRetain",
+    "CaseBase",
     "DifferentClass",
-    "OblivionByGoodness",
-    "get_retention_policy",
-    "VotingStrategy",
-    "MajorityVoting",
     "InverseDistanceWeightedVoting",
+    "KNNClassifier",
+    "MajorityVoting",
+    "NeverRetain",
+    "OblivionByGoodness",
+    "RetentionPolicy",
+    "VotingStrategy",
+    "get_retention_policy",
     "get_voting_strategy",
+    "kNNAlgorithm",
 ]
