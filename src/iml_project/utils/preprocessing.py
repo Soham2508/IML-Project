@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-import warnings
 
 import numpy as np
 import pandas as pd
@@ -117,7 +116,7 @@ class Preprocessor:
             raise ValueError("Feature names and feature types lengths do not match.")
 
         overrides = feature_type_overrides or {}
-        input_features = [name for name in names if name != target_name]
+        # input_features = [name for name in names if name != target_name]
 
         numeric_features: list[str] = []
         categorical_features: list[str] = []
@@ -206,9 +205,7 @@ class Preprocessor:
             ).fillna(0.0)
 
         present_categorical = [
-            name
-            for name in self.categorical_features_
-            if name in transformed.columns
+            name for name in self.categorical_features_ if name in transformed.columns
         ]
 
         if present_categorical:

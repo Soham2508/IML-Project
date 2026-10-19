@@ -11,7 +11,11 @@ from iml_project.utils.arff_reader import (
     validate_fold_pairs,
 )
 from iml_project.utils.folds import get_dataset_fold_map, get_dataset_names
-from iml_project.utils.preprocessing import Preprocessor, fit_and_transform, infer_feature_type
+from iml_project.utils.preprocessing import (
+    Preprocessor,
+    fit_and_transform,
+    infer_feature_type,
+)
 
 
 class DataPipelineTests(unittest.TestCase):
@@ -38,7 +42,9 @@ class DataPipelineTests(unittest.TestCase):
         """Verify schema alignment and target name consistency across all 10 folds."""
         for ds in ["grid", "heart-statlog"]:
             for fold in range(10):
-                train_df, test_df, names, types, target = load_dataset_fold(ds, fold, "data")
+                train_df, test_df, names, types, target = load_dataset_fold(
+                    ds, fold, "data"
+                )
                 self.assertEqual(target, "class")
                 self.assertEqual(list(train_df.columns), list(test_df.columns))
                 self.assertEqual(train_df.columns[-1], "class")
@@ -174,4 +180,3 @@ class DataPipelineTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
