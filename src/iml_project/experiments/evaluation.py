@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -100,11 +101,154 @@ def compute_paired_ttest(
     }
 
 
+def get_next_experiment_dir(base_results_dir: str | Path = "results") -> Path:
+    """Find the next experiment directory: {base_results_dir}/experiment_results_{N}."""
+    base = Path(base_results_dir)
+    base.mkdir(parents=True, exist_ok=True)
+
+    pattern = re.compile(r"^experiment_results_(\d+)$")
+    highest_num = 0
+    for item in base.iterdir():
+        if item.is_dir():
+            match = pattern.match(item.name)
+            if match:
+                num = int(match.group(1))
+                highest_num = max(highest_num, num)
+
+    next_num = highest_num + 1
+    next_dir = base / f"experiment_results_{next_num}"
+    next_dir.mkdir(parents=True, exist_ok=True)
+    return next_dir
+
+
+def generate_statistical_comparisons(
+    results_df: pd.DataFrame,
+    output_dir: str | Path,
+) -> pd.DataFrame:
+    """Compute pairwise paired t-tests comparing metrics, voting, retention, and best vs baseline."""
+    out_path = Path(output_dir)
+    comparisons: list[dict[str, Any]] = []
+
+    for ds in results_df["dataset"].unique():
+        base_cfg = {
+            "distance_metric": "euclidean",
+            "k": 3,
+            "voting_strategy": "majority",
+            "retention_policy": "nr",
+        }
+
+        ds_subset = results_df[results_df["dataset"] == ds]
+        agg_ds = aggregate_experiment_results(ds_subset)
+        if not agg_ds.empty:
+            best_row = agg_ds.iloc[0]
+            best_cfg = {
+                "distance_metric": best_row["distance_metric"],
+                "k": int(best_row["k"]),
+                "voting_strategy": best_row["voting_strategy"],
+                "retention_policy": best_row["retention_policy"],
+            }
+            try:
+                t_res = compute_paired_ttest(results_df, best_cfg, base_cfg, ds)
+                comparisons.append(
+                    {
+                        "comparison": "Best_vs_Baseline",
+                        "dataset": ds,
+                        "mean_diff": t_res["mean_diff"],
+                        "std_diff": t_res["std_diff"],
+                        "t_stat": t_res["t_statistic"],
+                        "p_value": t_res["p_value"],
+                        "sig_005": t_res["significant_005"],
+                        "cfg_a": str(best_cfg),
+                        "cfg_b": str(base_cfg),
+                    }
+                )
+            except (ValueError, KeyError):
+                continue
+
+        for m in ["manhattan", "canberra", "clark", "heom", "ivdm"]:
+            comp_cfg = {
+                "distance_metric": m,
+                "k": 3,
+                "voting_strategy": "majority",
+                "retention_policy": "nr",
+            }
+            try:
+                t_m = compute_paired_ttest(results_df, comp_cfg, base_cfg, ds)
+                comparisons.append(
+                    {
+                        "comparison": f"{m.capitalize()}_vs_Euclidean",
+                        "dataset": ds,
+                        "mean_diff": t_m["mean_diff"],
+                        "std_diff": t_m["std_diff"],
+                        "t_stat": t_m["t_statistic"],
+                        "p_value": t_m["p_value"],
+                        "sig_005": t_m["significant_005"],
+                        "cfg_a": str(comp_cfg),
+                        "cfg_b": str(base_cfg),
+                    }
+                )
+            except (ValueError, KeyError):
+                continue
+
+        cfg_idw = {
+            "distance_metric": "euclidean",
+            "k": 3,
+            "voting_strategy": "inverse_distance",
+            "retention_policy": "nr",
+        }
+        try:
+            t_v = compute_paired_ttest(results_df, cfg_idw, base_cfg, ds)
+            comparisons.append(
+                {
+                    "comparison": "IDW_vs_Majority",
+                    "dataset": ds,
+                    "mean_diff": t_v["mean_diff"],
+                    "std_diff": t_v["std_diff"],
+                    "t_stat": t_v["t_statistic"],
+                    "p_value": t_v["p_value"],
+                    "sig_005": t_v["significant_005"],
+                    "cfg_a": str(cfg_idw),
+                    "cfg_b": str(base_cfg),
+                }
+            )
+        except (ValueError, KeyError):
+            continue
+
+        for r in ["ar", "dc", "og"]:
+            cfg_r = {
+                "distance_metric": "euclidean",
+                "k": 3,
+                "voting_strategy": "majority",
+                "retention_policy": r,
+            }
+            try:
+                t_r = compute_paired_ttest(results_df, cfg_r, base_cfg, ds)
+                comparisons.append(
+                    {
+                        "comparison": f"{r.upper()}_vs_NR",
+                        "dataset": ds,
+                        "mean_diff": t_r["mean_diff"],
+                        "std_diff": t_r["std_diff"],
+                        "t_stat": t_r["t_statistic"],
+                        "p_value": t_r["p_value"],
+                        "sig_005": t_r["significant_005"],
+                        "cfg_a": str(cfg_r),
+                        "cfg_b": str(base_cfg),
+                    }
+                )
+            except (ValueError, KeyError):
+                continue
+
+    comp_df = pd.DataFrame(comparisons)
+    comp_df.to_csv(out_path / "statistical_comparisons.csv", index=False)
+    return comp_df
+
+
 def export_evaluation_report(
     results_df: pd.DataFrame,
     output_dir: str | Path = "results",
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Export summary tables and top configurations to CSV and Markdown."""
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """Export summary tables, top configurations, and statistical comparisons."""
     out_path = Path(output_dir)
     out_path.mkdir(parents=True, exist_ok=True)
 
@@ -114,4 +258,6 @@ def export_evaluation_report(
     best_df = find_best_configurations(agg_df, top_n=5)
     best_df.to_csv(out_path / "best_configurations.csv", index=False)
 
-    return agg_df, best_df
+    stat_df = generate_statistical_comparisons(results_df, out_path)
+
+    return agg_df, best_df, stat_df

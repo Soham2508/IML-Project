@@ -11,6 +11,7 @@ from iml_project.experiments.evaluation import (
     compute_paired_ttest,
     export_evaluation_report,
     find_best_configurations,
+    get_next_experiment_dir,
 )
 from iml_project.experiments.runner import run_experiment_matrix
 
@@ -102,6 +103,17 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    # Determine output directory (auto-increment results/experiment_results_{N})
+    if args.output_dir == "results":
+        out_dir = get_next_experiment_dir("results")
+    else:
+        out_dir = Path(args.output_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+    print(f"\n========================================================")
+    print(f"Output directory: {out_dir}")
+    print(f"========================================================")
+
     target_datasets = (
         ["heart-statlog", "grid"]
         if args.dataset == "all"
@@ -116,18 +128,19 @@ def main() -> None:
             distances=args.distances,
             voting_strategies=args.voting,
             retention_policies=args.retention,
-            output_dir=args.output_dir,
+            output_dir=out_dir,
         )
         all_dfs.append(df_ds)
 
     combined_df = pd.concat(all_dfs, ignore_index=True)
-    out_dir = Path(args.output_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
     combined_df.to_csv(out_dir / "all_experiments_results.csv", index=False)
 
-    agg_df, best_df = export_evaluation_report(combined_df, output_dir=out_dir)
-    print(f"\nSaved aggregated results to {out_dir / 'aggregated_results.csv'}")
-    print(f"Saved best configurations to {out_dir / 'best_configurations.csv'}")
+    agg_df, best_df, stat_df = export_evaluation_report(combined_df, output_dir=out_dir)
+    print(f"\nResults successfully saved to {out_dir}:")
+    print(f"  - all_experiments_results.csv ({len(combined_df)} rows)")
+    print(f"  - aggregated_results.csv ({len(agg_df)} rows)")
+    print(f"  - best_configurations.csv ({len(best_df)} rows)")
+    print(f"  - statistical_comparisons.csv ({len(stat_df)} tests)")
 
 
 if __name__ == "__main__":

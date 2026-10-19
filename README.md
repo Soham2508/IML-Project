@@ -100,7 +100,7 @@ python main.py --dataset all --k 1 3 5 7 9 --output_dir results
 - `--distances`: List of distance metrics (`euclidean`, `manhattan`, `canberra`, `clark`, `heom`, `ivdm`)
 - `--voting`: List of voting strategies (`majority`, `inverse_distance`)
 - `--retention`: List of retention policies (`nr`, `ar`, `dc`, `og`)
-- `--output_dir`: Output directory for generated CSVs (default: `results`)
+- `--output_dir`: Base output directory (default: `results`). Each run automatically creates a new versioned folder `experiment_results_{number}` (e.g. `results/experiment_results_1`, `results/experiment_results_2`, ...) by checking existing directories and incrementing the latest index by 1.
 
 ---
 

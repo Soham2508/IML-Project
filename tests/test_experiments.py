@@ -105,6 +105,29 @@ class ExperimentsTests(unittest.TestCase):
         self.assertAlmostEqual(ttest["mean_diff"], 0.05)
         self.assertGreater(ttest["t_statistic"], 0.0)
 
+    def test_get_next_experiment_dir(self) -> None:
+        """Verify get_next_experiment_dir detects latest number and increments by 1."""
+        import tempfile
+        from iml_project.experiments.evaluation import get_next_experiment_dir
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            # No runs yet -> creates experiment_results_1
+            dir1 = get_next_experiment_dir(tmp_path)
+            self.assertEqual(dir1.name, "experiment_results_1")
+            self.assertTrue(dir1.is_dir())
+
+            # Next run -> creates experiment_results_2
+            dir2 = get_next_experiment_dir(tmp_path)
+            self.assertEqual(dir2.name, "experiment_results_2")
+            self.assertTrue(dir2.is_dir())
+
+            # Simulate existing higher index (e.g. 5)
+            (tmp_path / "experiment_results_5").mkdir()
+            dir6 = get_next_experiment_dir(tmp_path)
+            self.assertEqual(dir6.name, "experiment_results_6")
+            self.assertTrue(dir6.is_dir())
+
 
 if __name__ == "__main__":
     unittest.main()
