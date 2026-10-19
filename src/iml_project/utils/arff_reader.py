@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
-import re
 from typing import Any
 
 import numpy as np
@@ -91,17 +91,41 @@ def validate_fold_pairs(groups: dict[str, list[FoldPair]]) -> None:
             )
 
 
+def resolve_dataset_dir(dataset_name: str, data_root: str | Path) -> tuple[Path, str]:
+    """Resolve dataset directory and canonical name, supporting common aliases."""
+    root = Path(data_root)
+    dataset_dir = root / dataset_name
+    if dataset_dir.is_dir():
+        return dataset_dir, dataset_name
+
+    aliases = {
+        "tao-grid": "grid",
+        "tao_grid": "grid",
+        "grid": "grid",
+        "heart-statlog": "heart-statlog",
+        "heart_statlog": "heart-statlog",
+    }
+    normalized = dataset_name.lower().replace("_", "-")
+    resolved_name = aliases.get(normalized, dataset_name)
+    resolved_dir = root / resolved_name
+    if resolved_dir.is_dir():
+        return resolved_dir, resolved_name
+
+    for item in root.iterdir():
+        if item.is_dir() and item.name.lower() == dataset_name.lower():
+            return item, item.name
+
+    raise FileNotFoundError(f"Dataset directory not found: {dataset_dir}")
+
+
 def load_dataset_fold(
     dataset_name: str, fold_index: int, data_root: str | Path
 ) -> tuple[pd.DataFrame, pd.DataFrame, list[str], list[str], str]:
     """Load a single train and test fold for the named dataset."""
-    root = Path(data_root)
-    dataset_dir = root / dataset_name
-    if not dataset_dir.exists():
-        raise FileNotFoundError(f"Dataset directory not found: {dataset_dir}")
+    dataset_dir, canonical_name = resolve_dataset_dir(dataset_name, data_root)
 
-    train_path = dataset_dir / f"{dataset_name}.fold.{fold_index:06d}.train.arff"
-    test_path = dataset_dir / f"{dataset_name}.fold.{fold_index:06d}.test.arff"
+    train_path = dataset_dir / f"{canonical_name}.fold.{fold_index:06d}.train.arff"
+    test_path = dataset_dir / f"{canonical_name}.fold.{fold_index:06d}.test.arff"
     if not train_path.exists() or not test_path.exists():
         raise FileNotFoundError(
             f"Missing fold files for dataset '{dataset_name}' at index {fold_index}"
@@ -114,6 +138,9 @@ def load_dataset_fold(
         raise ValueError(
             f"Train/test columns differ for dataset '{dataset_name}' fold {fold_index}."
         )
+
+    # Strictly align test_df column ordering to match train_df column ordering
+    test_df = test_df[train_df.columns].copy()
 
     target_name = train_df.columns[-1]
     if target_name != test_df.columns[-1]:

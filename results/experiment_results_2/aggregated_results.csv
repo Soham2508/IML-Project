@@ -1,0 +1,2 @@
+dataset,distance_metric,k,voting_strategy,retention_policy,mean_accuracy,std_accuracy,mean_efficiency_ms,std_efficiency_ms,mean_retention_ratio,std_retention_ratio,total_folds
+heart-statlog,euclidean,1,majority,nr,0.774074074074074,0.059078943772866176,0.03406555538445159,0.002449351068652935,1.0,0.0,10

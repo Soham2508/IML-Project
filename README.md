@@ -1,123 +1,252 @@
-# IML Project - Week 1 scaffold
+# IML Work 2: Classification with Lazy Learning Framework
 
-Group: 12
+## Overview
+This repository implements the baseline K-Nearest Neighbors (KNN) classification framework from scratch for **IML Work 2 (2026–2027)**.
+The framework performs a comparative study of distance/similarity metrics, voting schemes, retention policies, and cross-validation performance on two UCI benchmark datasets (`heart-statlog` and `grid`).
 
-Team members:
-- Student 1: [Full name]
-- Student 2: [Full name]
-- Student 3: [Full name]
-- Student 4: [Full name]
+All code is implemented in Python 3.11 with zero data leakage: feature-type inference, normalization parameters, missing value statistics, and conditional probabilities are strictly fitted on each training fold.
 
-Python requirement: Python 3.11
-Operating system validation: Windows 11 / Windows PowerShell
+---
 
-This repository is the course project scaffold for Work 2: Classification with Lazy Learning, SVM and Random Forest. The repository currently contains the Week 1 implementation scaffold and the required dataset-validation utilities. The Week 2 custom k-NN experiment remains a planned extension, but the project structure and interfaces are in place for it.
-
-## Dataset requirement mismatch notice
-
-The selected datasets in the assignment table are TAO-Grid and Heart-Statlog, and the project is intentionally written to support both numeric-only and mixed-type data. However, the assignment table reports zero nominal attributes for this pair, which conflicts with a later statement that at least one dataset should contain both numeric and nominal attributes. The code does not silently swap datasets; instead it keeps the selected pair configurable and uses type-aware preprocessing structures that can accommodate nominal features if the TA changes the dataset choice.
-
-This mismatch should be confirmed with the teaching team before final submission. Until then, the project documents the current pair as all-numeric benchmarking data only.
-
-## Repository structure
-
-```text
-IML_Project/
-├── AGENTS.md
-├── README.md
-├── requirements.txt
-├── main.py
+## Repository Structure
+```
+IML-Project/
+├── data/
+│   ├── grid/                # TAO-Grid 10-fold CV ARFF files
+│   └── heart-statlog/       # Heart-Statlog 10-fold CV ARFF files
+├── results/                 # Generated experiment CSVs and statistical reports
+│   ├── all_experiments_results.csv
+│   ├── results_heart-statlog.csv
+│   ├── results_grid.csv
+│   ├── aggregated_results.csv
+│   ├── best_configurations.csv
+│   └── statistical_comparisons.csv
 ├── src/
 │   └── iml_project/
-│       ├── __init__.py
-│       ├── data/
-│       │   ├── __init__.py
-│       │   ├── arff_reader.py
-│       │   ├── folds.py
-│       │   └── preprocessing.py
-│       ├── evaluation/
-│       │   ├── __init__.py
-│       │   ├── metrics.py
-│       │   └── runner.py
-│       └── models/
-│           ├── __init__.py
-│           ├── distance_metrics.py
-│           ├── knn.py
-│           ├── retention.py
-│           └── sklearn_models.py
-├── data/
-│   ├── grid/
-│   └── heart-statlog/
-├── results/
-│   └── week1/
+│       ├── core/
+│       │   ├── knn.py             # KNNClassifier & kNNAlgorithm from scratch
+│       │   ├── voting.py          # Majority and Inverse Distance Weighted voting
+│       │   └── retention.py       # CaseBase, NR, AR, DC, and OG retention policies
+│       ├── experiments/
+│       │   ├── runner.py          # Grid runner with fold isolation
+│       │   └── evaluation.py      # Statistical paired t-tests & aggregation
+│       └── utils/
+│           ├── arff_reader.py     # ARFF table loading and fold alignment
+│           ├── distance_metrics.py# Euclidean, Manhattan, Canberra, Clark, HEOM, IVDM
+│           ├── folds.py           # Fold discovery and validation
+│           └── preprocessing.py   # Data-driven feature inference & normalization
 ├── tests/
-│   └── test_project_scaffold.py
-└── .venv/
+│   ├── test_preprocessing.py      # Legacy preprocessing tests
+│   ├── test_data_pipeline.py      # Fold alignment, feature inference, leakage tests
+│   ├── test_core_algorithms.py    # Hand-calculated metric tests, voting, retention
+│   └── test_experiments.py        # Smoke tests and statistical comparison tests
+├── main.py                        # CLI entry point to run experiments
+├── requirements.txt               # Dependencies
+└── README.md
 ```
 
-## Environment setup
+---
 
+## Setup and Installation
+
+1. Create and activate a Python 3.11 virtual environment:
+   ```powershell
+   python -m venv .venv
+   .\.venv\Scripts\Activate.ps1
+   ```
+
+2. Install dependencies:
+   ```powershell
+   pip install -r requirements.txt
+   ```
+
+---
+
+## Running the Unit Tests
+
+Execute the comprehensive test suite (22 unit tests) with `PYTHONPATH` set to `src`:
 ```powershell
-cd C:\Users\Soham Chakraborty\Documents\IML-Project
-py -3.11 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+$env:PYTHONPATH="src"
+python -m unittest discover tests
 ```
 
-## Validate the data contract
+---
 
+## Running Experiments
+
+You can run experiments for `heart-statlog` and `grid` separately or together:
+
+### 1. Run Heart-Statlog:
 ```powershell
-python main.py --experiment validate-data --dataset all
+$env:PYTHONPATH="src"
+python main.py --dataset heart-statlog --k 1 3 5 7 9 --output_dir results
 ```
 
-This command scans the `data/` directory and verifies that each dataset contains exactly ten train/test fold pairs with the expected fold naming pattern.
-
-## Run the Week 1 experiment
-
+### 2. Run Grid:
 ```powershell
-python main.py --experiment week1 --dataset all --output-dir results/week1
+$env:PYTHONPATH="src"
+python main.py --dataset grid --k 1 3 5 7 9 --output_dir results
 ```
 
-The script reads the supplied fold files, fits normalization parameters only on the training folds, evaluates SVM and Random Forest over the provided fold pairs, and writes the following CSV outputs:
-
-```text
-results/week1/
-├── svm_fold_results.csv
-├── svm_summary.csv
-├── random_forest_fold_results.csv
-└── random_forest_summary.csv
-```
-
-## Model configuration used
-
-### SVM
-
-- Model: `sklearn.svm.SVC`
-- Kernels: `linear`, `rbf`
-- C values: `0.1`, `1.0`, `10.0`
-- Gamma: `scale` for RBF experiments
-- Training: fit on each provided training fold; prediction on the matching test fold
-- Timing: fit time and prediction time recorded separately using `time.perf_counter()`
-
-### Random Forest
-
-- Model: `sklearn.ensemble.RandomForestClassifier`
-- `n_estimators`: `50`, `100`, `200`
-- `criterion`: `gini`, `entropy`
-- `random_state`: `42`
-- Timing: fit time and prediction time recorded separately
-
-## Data loading and preprocessing rules
-
-- ARFF files are loaded with `scipy.io.arff.loadarff`.
-- Byte-valued nominal labels are decoded to Python strings.
-- Missing values are handled safely. Numeric features use train-only medians; constant numeric training features are normalized to `0` rather than dividing by zero.
-- Numerical features are normalized to `[0, 1]` using the training fold min/max values only, then applied to the corresponding test fold.
-- The current dataset pair is all-numeric; the code keeps metadata for future mixed-type datasets.
-
-## Quality checks
-
+### 3. Run Both Datasets:
 ```powershell
-python -m unittest discover -s tests -v
+$env:PYTHONPATH="src"
+python main.py --dataset all --k 1 3 5 7 9 --output_dir results
 ```
+
+### Available CLI Options:
+- `--dataset`: `heart-statlog`, `grid`, or `all`
+- `--k`: List of neighbors, e.g. `--k 1 3 5 7 9`
+- `--distances`: List of distance metrics (`euclidean`, `manhattan`, `canberra`, `clark`, `heom`, `ivdm`)
+- `--voting`: List of voting strategies (`majority`, `inverse_distance`)
+- `--retention`: List of retention policies (`nr`, `ar`, `dc`, `og`)
+- `--output_dir`: Base output directory (default: `results`). Each run automatically creates a new versioned folder `experiment_results_{number}` (e.g. `results/experiment_results_1`, `results/experiment_results_2`, ...) by checking existing directories and incrementing the latest index by 1.
+
+---
+
+## Implemented Components & Mathematical Definitions
+
+### 1. Distance Metrics
+- **Euclidean** ($r=2$): $d(x, y) = \sqrt{\sum_{f} (x_f - y_f)^2}$
+- **Manhattan** ($r=1$): $d(x, y) = \sum_{f} |x_f - y_f|$
+- **Canberra**: $d(x, y) = \sum_{f} \frac{|x_f - y_f|}{|x_f| + |y_f|}$ (with $0/0 \to 0.0$)
+- **Clark**: $d(x, y) = \sqrt{\sum_{f} \left(\frac{x_f - y_f}{x_f + y_f}\right)^2}$ (with $0/0 \to 0.0$)
+- **HEOM** (Wilson & Martinez 1997): Heterogeneous Euclidean-Overlap Metric handling numeric normalization and nominal overlap ($\delta = 0$ if equal, $1$ otherwise).
+- **IVDM** (Wilson & Martinez 1997): Discretizes continuous features and estimates conditional class probabilities $P(C=c \mid f=v)$ strictly on the training fold with Laplace smoothing.
+
+### 2. Voting Policies
+- **Majority Voting**: Each neighbor casts 1 vote.
+- **Inverse Distance Weighted Voting**: Each neighbor casts $\frac{1}{d(q, x_c)^p}$ ($p=1$). Zero-distance neighbors take absolute precedence, preventing division by zero.
+- **Tie-Breaking**: Nearest individual neighbor (1-NN), then class prior in training fold, then stable string order.
+
+### 3. Retention Policies
+- **Never Retain (NR)**: Training set remains fixed.
+- **Always Retain (AR)**: Retains every solved query.
+- **Different Class (DC)**: Retains query only when misclassified ($y_{pred} \neq y_{true}$).
+- **Oblivion by Goodness (OG)**: Initial goodness $G_0 = 0.5$, $\alpha = 0.2$. Retrieved neighbors update goodness based on accuracy reward $r(c) \in \{0, 1\}$. Cases with $G_t(c) < 0.5$ are pruned immediately.
+# IML Work 2: Classification with Lazy Learning Framework
+
+## Overview
+This repository implements the baseline K-Nearest Neighbors (KNN) classification framework from scratch for **IML Work 2 (2026–2027)**.
+The framework performs a comparative study of distance/similarity metrics, voting schemes, retention policies, and cross-validation performance on two UCI benchmark datasets (`heart-statlog` and `grid`).
+
+All code is implemented in Python 3.11 with zero data leakage: feature-type inference, normalization parameters, missing value statistics, and conditional probabilities are strictly fitted on each training fold.
+
+---
+
+## Repository Structure
+```
+IML-Project/
+├── data/
+│   ├── grid/                # TAO-Grid 10-fold CV ARFF files
+│   └── heart-statlog/       # Heart-Statlog 10-fold CV ARFF files
+├── results/                 # Generated experiment CSVs and statistical reports
+│   ├── all_experiments_results.csv
+│   ├── results_heart-statlog.csv
+│   ├── results_grid.csv
+│   ├── aggregated_results.csv
+│   ├── best_configurations.csv
+│   └── statistical_comparisons.csv
+├── src/
+│   └── iml_project/
+│       ├── core/
+│       │   ├── knn.py             # KNNClassifier & kNNAlgorithm from scratch
+│       │   ├── voting.py          # Majority and Inverse Distance Weighted voting
+│       │   └── retention.py       # CaseBase, NR, AR, DC, and OG retention policies
+│       ├── experiments/
+│       │   ├── runner.py          # Grid runner with fold isolation
+│       │   └── evaluation.py      # Statistical paired t-tests & aggregation
+│       └── utils/
+│           ├── arff_reader.py     # ARFF table loading and fold alignment
+│           ├── distance_metrics.py# Euclidean, Manhattan, Canberra, Clark, HEOM, IVDM
+│           ├── folds.py           # Fold discovery and validation
+│           └── preprocessing.py   # Data-driven feature inference & normalization
+├── tests/
+│   ├── test_preprocessing.py      # Legacy preprocessing tests
+│   ├── test_data_pipeline.py      # Fold alignment, feature inference, leakage tests
+│   ├── test_core_algorithms.py    # Hand-calculated metric tests, voting, retention
+│   └── test_experiments.py        # Smoke tests and statistical comparison tests
+├── main.py                        # CLI entry point to run experiments
+├── requirements.txt               # Dependencies
+└── README.md
+```
+
+---
+
+## Setup and Installation
+
+1. Create and activate a Python 3.11 virtual environment:
+   ```powershell
+   python -m venv .venv
+   .\.venv\Scripts\Activate.ps1
+   ```
+
+2. Install dependencies:
+   ```powershell
+   pip install -r requirements.txt
+   ```
+
+---
+
+## Running the Unit Tests
+
+Execute the comprehensive test suite (22 unit tests) with `PYTHONPATH` set to `src`:
+```powershell
+$env:PYTHONPATH="src"
+python -m unittest discover tests
+```
+
+---
+
+## Running Experiments
+
+You can run experiments for `heart-statlog` and `grid` separately or together:
+
+### 1. Run Heart-Statlog:
+```powershell
+$env:PYTHONPATH="src"
+python main.py --dataset heart-statlog --k 1 3 5 7 9 --output_dir results
+```
+
+### 2. Run Grid:
+```powershell
+$env:PYTHONPATH="src"
+python main.py --dataset grid --k 1 3 5 7 9 --output_dir results
+```
+
+### 3. Run Both Datasets:
+```powershell
+$env:PYTHONPATH="src"
+python main.py --dataset all --k 1 3 5 7 9 --output_dir results
+```
+
+### Available CLI Options:
+- `--dataset`: `heart-statlog`, `grid`, or `all`
+- `--k`: List of neighbors, e.g. `--k 1 3 5 7 9`
+- `--distances`: List of distance metrics (`euclidean`, `manhattan`, `canberra`, `clark`, `heom`, `ivdm`)
+- `--voting`: List of voting strategies (`majority`, `inverse_distance`)
+- `--retention`: List of retention policies (`nr`, `ar`, `dc`, `og`)
+- `--output_dir`: Output directory for generated CSVs (default: `results`)
+
+---
+
+## Implemented Components & Mathematical Definitions
+
+### 1. Distance Metrics
+- **Euclidean** ($r=2$): $d(x, y) = \sqrt{\sum_{f} (x_f - y_f)^2}$
+- **Manhattan** ($r=1$): $d(x, y) = \sum_{f} |x_f - y_f|$
+- **Canberra**: $d(x, y) = \sum_{f} \frac{|x_f - y_f|}{|x_f| + |y_f|}$ (with $0/0 \to 0.0$)
+- **Clark**: $d(x, y) = \sqrt{\sum_{f} \left(\frac{x_f - y_f}{x_f + y_f}\right)^2}$ (with $0/0 \to 0.0$)
+- **HEOM** (Wilson & Martinez 1997): Heterogeneous Euclidean-Overlap Metric handling numeric normalization and nominal overlap ($\delta = 0$ if equal, $1$ otherwise).
+- **IVDM** (Wilson & Martinez 1997): Discretizes continuous features and estimates conditional class probabilities $P(C=c \mid f=v)$ strictly on the training fold with Laplace smoothing.
+
+### 2. Voting Policies
+- **Majority Voting**: Each neighbor casts 1 vote.
+- **Inverse Distance Weighted Voting**: Each neighbor casts $\frac{1}{d(q, x_c)^p}$ ($p=1$). Zero-distance neighbors take absolute precedence, preventing division by zero.
+- **Tie-Breaking**: Nearest individual neighbor (1-NN), then class prior in training fold, then stable string order.
+
+### 3. Retention Policies
+- **Never Retain (NR)**: Training set remains fixed.
+- **Always Retain (AR)**: Retains every solved query.
+- **Different Class (DC)**: Retains query only when misclassified ($y_{pred} \neq y_{true}$).
+- **Oblivion by Goodness (OG)**: Initial goodness $G_0 = 0.5$, $\alpha = 0.2$. Retrieved neighbors update goodness based on accuracy reward $r(c) \in \{0, 1\}$. Cases with $G_t(c) < 0.5$ are pruned immediately.
