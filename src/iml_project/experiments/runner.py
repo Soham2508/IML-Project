@@ -10,7 +10,9 @@ import numpy as np
 import pandas as pd
 
 from iml_project.core.knn import KNNClassifier
+from iml_project.core.random_forest import rfAlgorithm
 from iml_project.core.retention import get_retention_policy
+from iml_project.core.svm import svmAlgorithm
 from iml_project.core.voting import get_voting_strategy
 from iml_project.utils.arff_reader import load_dataset_fold, resolve_dataset_dir
 from iml_project.utils.distance_metrics import (
@@ -47,6 +49,10 @@ class ExperimentResult:
     retention_ratio: float
     mean_prediction_time: float
     total_prediction_time: float
+    balanced_accuracy: float = 0.0
+    precision_macro: float = 0.0
+    recall_macro: float = 0.0
+    f1_macro: float = 0.0
 
 
 def prepare_fold_data(
@@ -95,6 +101,36 @@ def prepare_fold_data(
     return X_train, y_train, X_test, y_test, metric
 
 
+def prepare_eager_fold_data(
+    dataset: str,
+    fold: int,
+    data_root: str | Path = "data",
+) -> tuple[np.ndarray, list[Any], np.ndarray, list[Any]]:
+    """Load and preprocess fold data for eager models (SVM, RF) with zero test leakage."""
+    train_df, test_df, names, types, target_name = load_dataset_fold(
+        dataset, fold, data_root
+    )
+
+    preprocessor = Preprocessor.fit(
+        train_df,
+        feature_names=names,
+        feature_types=types,
+        target_name=target_name,
+        encode_categorical=True,
+    )
+
+    trans_train = preprocessor.transform(train_df)
+    trans_test = preprocessor.transform(test_df)
+
+    pred_cols = [c for c in trans_train.columns if c != target_name]
+    X_train = trans_train[pred_cols].to_numpy(dtype=np.float64)
+    y_train = trans_train[target_name].tolist()
+    X_test = trans_test[pred_cols].to_numpy(dtype=np.float64)
+    y_test = trans_test[target_name].tolist()
+
+    return X_train, y_train, X_test, y_test
+
+
 def run_single_experiment(
     config: ExperimentConfig,
     data_root: str | Path = "data",
@@ -128,6 +164,10 @@ def run_single_experiment(
         voting_strategy=config.voting_strategy,
         retention_policy=config.retention_policy,
         accuracy=eval_metrics["accuracy"],
+        balanced_accuracy=eval_metrics.get("balanced_accuracy", eval_metrics["accuracy"]),
+        precision_macro=eval_metrics.get("precision_macro", 0.0),
+        recall_macro=eval_metrics.get("recall_macro", 0.0),
+        f1_macro=eval_metrics.get("f1_macro", 0.0),
         correct=eval_metrics["correct"],
         incorrect=eval_metrics["incorrect"],
         total=eval_metrics["total"],
@@ -206,6 +246,10 @@ def run_experiment_matrix(
                         "voting_strategy": vote,
                         "retention_policy": ret,
                         "accuracy": res["accuracy"],
+                        "balanced_accuracy": res.get("balanced_accuracy", res["accuracy"]),
+                        "precision_macro": res.get("precision_macro", 0.0),
+                        "recall_macro": res.get("recall_macro", 0.0),
+                        "f1_macro": res.get("f1_macro", 0.0),
                         "correct": res["correct"],
                         "incorrect": res["incorrect"],
                         "total": res["total"],
@@ -231,3 +275,162 @@ def run_experiment_matrix(
     df_all.to_csv(out_path / "all_experiments_results.csv", index=False)
     return df_all
 
+
+def run_svm_experiments(
+    datasets: Sequence[str],
+    folds: Sequence[int] = range(10),
+    kernels: Sequence[str] = ("linear", "rbf"),
+    C: float = 1.0,
+    gamma: str | float = "scale",
+    random_state: int = 42,
+    data_root: str | Path = "data",
+    output_dir: str | Path = "results",
+    progress_callback: Any = None,
+) -> pd.DataFrame:
+    """Run SVM experiments over specified datasets, folds, and kernels."""
+    out_path = Path(output_dir)
+    out_path.mkdir(parents=True, exist_ok=True)
+
+    results: list[dict[str, Any]] = []
+    total_runs = len(datasets) * len(folds) * len(kernels)
+    count = 0
+
+    for ds in datasets:
+        ds_results: list[dict[str, Any]] = []
+        for fold in folds:
+            X_tr, y_tr, X_te, y_te = prepare_eager_fold_data(
+                ds, fold, data_root=data_root
+            )
+
+            for kernel in kernels:
+                res = svmAlgorithm(
+                    X_tr,
+                    y_tr,
+                    X_te,
+                    y_te,
+                    kernel=kernel,
+                    C=C,
+                    gamma=gamma,
+                    random_state=random_state,
+                )
+
+                row = {
+                    "dataset": ds,
+                    "fold": fold,
+                    "model": "svm",
+                    "kernel": kernel,
+                    "C": C,
+                    "gamma": str(gamma),
+                    "n_estimators": None,
+                    "criterion": None,
+                    "max_depth": None,
+                    "accuracy": res["accuracy"],
+                    "balanced_accuracy": res["balanced_accuracy"],
+                    "precision_macro": res["precision_macro"],
+                    "recall_macro": res["recall_macro"],
+                    "f1_macro": res["f1_macro"],
+                    "correct": res["correct"],
+                    "incorrect": res["incorrect"],
+                    "total": res["total"],
+                    "fit_time": res["fit_time"],
+                    "mean_prediction_time": res["mean_prediction_time"],
+                    "total_prediction_time": res["total_prediction_time"],
+                    "initial_size": res["initial_size"],
+                    "final_size": res["final_size"],
+                    "retention_ratio": res["retention_ratio"],
+                }
+                results.append(row)
+                ds_results.append(row)
+                count += 1
+
+                if progress_callback:
+                    progress_callback(count, total_runs)
+
+        ds_df = pd.DataFrame(ds_results)
+        canonical_ds_name = resolve_dataset_dir(ds, data_root)[1]
+        ds_df.to_csv(out_path / f"svm_results_{canonical_ds_name}.csv", index=False)
+
+    df_all = pd.DataFrame(results)
+    df_all.to_csv(out_path / "svm_results.csv", index=False)
+    return df_all
+
+
+def run_rf_experiments(
+    datasets: Sequence[str],
+    folds: Sequence[int] = range(10),
+    n_estimators_list: Sequence[int] = (100, 200),
+    criteria_list: Sequence[str] = ("gini", "entropy"),
+    max_depth: int | None = None,
+    random_state: int = 42,
+    n_jobs: int = -1,
+    data_root: str | Path = "data",
+    output_dir: str | Path = "results",
+    progress_callback: Any = None,
+) -> pd.DataFrame:
+    """Run Random Forest experiments over specified datasets, folds, trees, and split criteria."""
+    out_path = Path(output_dir)
+    out_path.mkdir(parents=True, exist_ok=True)
+
+    results: list[dict[str, Any]] = []
+    total_runs = len(datasets) * len(folds) * len(n_estimators_list) * len(criteria_list)
+    count = 0
+
+    for ds in datasets:
+        ds_results: list[dict[str, Any]] = []
+        for fold in folds:
+            X_tr, y_tr, X_te, y_te = prepare_eager_fold_data(
+                ds, fold, data_root=data_root
+            )
+
+            for n_est, crit in itertools.product(n_estimators_list, criteria_list):
+                res = rfAlgorithm(
+                    X_tr,
+                    y_tr,
+                    X_te,
+                    y_te,
+                    n_estimators=n_est,
+                    criterion=crit,
+                    max_depth=max_depth,
+                    random_state=random_state,
+                    n_jobs=n_jobs,
+                )
+
+                row = {
+                    "dataset": ds,
+                    "fold": fold,
+                    "model": "rf",
+                    "kernel": None,
+                    "C": None,
+                    "gamma": None,
+                    "n_estimators": n_est,
+                    "criterion": crit,
+                    "max_depth": max_depth,
+                    "accuracy": res["accuracy"],
+                    "balanced_accuracy": res["balanced_accuracy"],
+                    "precision_macro": res["precision_macro"],
+                    "recall_macro": res["recall_macro"],
+                    "f1_macro": res["f1_macro"],
+                    "correct": res["correct"],
+                    "incorrect": res["incorrect"],
+                    "total": res["total"],
+                    "fit_time": res["fit_time"],
+                    "mean_prediction_time": res["mean_prediction_time"],
+                    "total_prediction_time": res["total_prediction_time"],
+                    "initial_size": res["initial_size"],
+                    "final_size": res["final_size"],
+                    "retention_ratio": res["retention_ratio"],
+                }
+                results.append(row)
+                ds_results.append(row)
+                count += 1
+
+                if progress_callback:
+                    progress_callback(count, total_runs)
+
+        ds_df = pd.DataFrame(ds_results)
+        canonical_ds_name = resolve_dataset_dir(ds, data_root)[1]
+        ds_df.to_csv(out_path / f"rf_results_{canonical_ds_name}.csv", index=False)
+
+    df_all = pd.DataFrame(results)
+    df_all.to_csv(out_path / "rf_results.csv", index=False)
+    return df_all

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .knn import KNNClassifier, kNNAlgorithm
+from .random_forest import rfAlgorithm
 from .retention import (
     AlwaysRetain,
     CaseBase,
@@ -10,6 +11,7 @@ from .retention import (
     RetentionPolicy,
     get_retention_policy,
 )
+from .svm import svmAlgorithm
 from .voting import (
     InverseDistanceWeightedVoting,
     MajorityVoting,
@@ -31,4 +33,6 @@ __all__ = [
     "get_retention_policy",
     "get_voting_strategy",
     "kNNAlgorithm",
+    "rfAlgorithm",
+    "svmAlgorithm",
 ]

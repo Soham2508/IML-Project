@@ -1,0 +1,2 @@
+dataset,eager_model,eager_best_config,eager_mean_accuracy,knn_best_config,knn_mean_accuracy,mean_diff,std_diff,t_statistic,p_value,significant_005
+heart-statlog,svm,"{'kernel': 'linear', 'C': 1.0, 'gamma': 'scale'}",0.8481481481481481,"{'distance_metric': 'manhattan', 'k': 9, 'voting_strategy': 'inverse_distance', 'retention_policy': 'nr'}",0.8481481481481481,-1.1102230246251566e-17,0.05521155499999483,-6.358874457669286e-16,0.9999999999999996,False
