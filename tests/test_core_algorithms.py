@@ -153,7 +153,7 @@ class CoreAlgorithmsTests(unittest.TestCase):
         )
         knn.fit(X_train, y_train)
 
-        pred, idxs, dists = knn.predict_one(np.array([0.1, 0.1]))
+        pred, idxs, _dists = knn.predict_one(np.array([0.1, 0.1]))
         self.assertEqual(pred, "A")
         self.assertEqual(idxs, [0, 1])
 

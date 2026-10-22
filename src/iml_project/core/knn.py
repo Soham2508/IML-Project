@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
+from sklearn.metrics import balanced_accuracy_score, precision_recall_fscore_support
 
 from iml_project.utils.distance_metrics import DistanceMetric, IVDMDistance
 
@@ -126,8 +127,20 @@ class KNNClassifier:
         final_size = len(self.case_base)
         retention_ratio = final_size / initial_size if initial_size > 0 else 1.0
 
+        if n_queries > 0:
+            balanced_acc = float(balanced_accuracy_score(y_true, y_pred))
+            prec, rec, f1, _ = precision_recall_fscore_support(
+                y_true, y_pred, average="macro", zero_division=0
+            )
+        else:
+            balanced_acc, prec, rec, f1 = 0.0, 0.0, 0.0, 0.0
+
         return {
             "accuracy": accuracy,
+            "balanced_accuracy": balanced_acc,
+            "precision_macro": float(prec),
+            "recall_macro": float(rec),
+            "f1_macro": float(f1),
             "correct": correct,
             "incorrect": incorrect,
             "total": n_queries,

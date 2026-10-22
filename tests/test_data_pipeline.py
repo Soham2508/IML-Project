@@ -41,7 +41,7 @@ class DataPipelineTests(unittest.TestCase):
         """Verify schema alignment and target name consistency across all 10 folds."""
         for ds in ["grid", "heart-statlog"]:
             for fold in range(10):
-                train_df, test_df, names, types, target = load_dataset_fold(
+                train_df, test_df, _names, _types, target = load_dataset_fold(
                     ds, fold, "data"
                 )
                 self.assertEqual(target, "class")
@@ -67,7 +67,7 @@ class DataPipelineTests(unittest.TestCase):
 
         # String nominal -> nominal
         s_str = pd.Series(["cat", "dog", "cat"])
-        t_str, r_str = infer_feature_type(s_str)
+        t_str, _r_str = infer_feature_type(s_str)
         self.assertEqual(t_str, "nominal")
 
         # Explicit override
@@ -128,7 +128,7 @@ class DataPipelineTests(unittest.TestCase):
             }
         )
 
-        transformed_train, transformed_test, prep = fit_and_transform(
+        transformed_train, transformed_test, _prep = fit_and_transform(
             train_df,
             test_df,
             ["constant_feat", "label"],
@@ -157,7 +157,7 @@ class DataPipelineTests(unittest.TestCase):
             }
         )
 
-        tr_norm, te_norm, prep = fit_and_transform(
+        tr_norm, te_norm, _prep = fit_and_transform(
             train_df,
             test_df,
             ["num", "cat", "class"],

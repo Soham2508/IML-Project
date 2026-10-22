@@ -1,34 +1,45 @@
 from __future__ import annotations
 
 import argparse
-import sys
 import time
 from pathlib import Path
+
 import pandas as pd
 
 from iml_project.experiments.evaluation import (
+    aggregate_eager_results,
     aggregate_experiment_results,
-    compute_paired_ttest,
+    export_eager_evaluation_report,
     export_evaluation_report,
-    find_best_configurations,
     get_next_experiment_dir,
 )
-from iml_project.experiments.runner import run_experiment_matrix
+from iml_project.experiments.runner import (
+    run_experiment_matrix,
+    run_rf_experiments,
+    run_svm_experiments,
+)
 
 
-def run_dataset_pipeline(
+def run_knn_pipeline(
     dataset_name: str,
     k_values: list[int],
     distances: list[str],
     voting_strategies: list[str],
     retention_policies: list[str],
-    output_dir: str = "results",
+    output_dir: str | Path = "results",
 ) -> pd.DataFrame:
-    print(f"\n========================================================")
+    print("\n========================================================")
     print(f"Starting KNN evaluation pipeline for dataset: {dataset_name}")
-    print(f"Configurations per fold: {len(distances)} distances x {len(k_values)} k x {len(voting_strategies)} voting x {len(retention_policies)} retention = {len(distances)*len(k_values)*len(voting_strategies)*len(retention_policies)}")
-    print(f"Total evaluations across 10 folds: {10 * len(distances)*len(k_values)*len(voting_strategies)*len(retention_policies)}")
-    print(f"========================================================")
+    print(
+        f"Configurations per fold: {len(distances)} distances x {len(k_values)} k "
+        f"x {len(voting_strategies)} voting x {len(retention_policies)} retention = "
+        f"{len(distances)*len(k_values)*len(voting_strategies)*len(retention_policies)}"
+    )
+    print(
+        f"Total evaluations across 10 folds: "
+        f"{10 * len(distances)*len(k_values)*len(voting_strategies)*len(retention_policies)}"
+    )
+    print("========================================================")
 
     t0 = time.perf_counter()
     df = run_experiment_matrix(
@@ -44,9 +55,8 @@ def run_dataset_pipeline(
     elapsed = time.perf_counter() - t0
     print(f"Completed {len(df)} evaluations for '{dataset_name}' in {elapsed:.2f} seconds.")
 
-    # Aggregate results for this dataset
     agg = aggregate_experiment_results(df)
-    print(f"\nTop 5 Configurations for {dataset_name}:")
+    print(f"\nTop 5 Configurations for {dataset_name} (KNN):")
     top5 = agg.head(5)
     for idx, row in top5.iterrows():
         print(
@@ -57,8 +67,104 @@ def run_dataset_pipeline(
     return df
 
 
+def run_svm_pipeline(
+    dataset_name: str,
+    kernels: list[str],
+    C: float,
+    gamma: str | float,
+    random_state: int,
+    output_dir: str | Path = "results",
+) -> pd.DataFrame:
+    print("\n========================================================")
+    print(f"Starting SVM evaluation pipeline for dataset: {dataset_name}")
+    print(f"Configurations per fold: {len(kernels)} kernels (C={C}, gamma={gamma})")
+    print(f"Total evaluations across 10 folds: {10 * len(kernels)}")
+    print("========================================================")
+
+    t0 = time.perf_counter()
+    df = run_svm_experiments(
+        datasets=[dataset_name],
+        folds=range(10),
+        kernels=kernels,
+        C=C,
+        gamma=gamma,
+        random_state=random_state,
+        data_root="data",
+        output_dir=output_dir,
+    )
+    elapsed = time.perf_counter() - t0
+    print(f"Completed {len(df)} evaluations for '{dataset_name}' in {elapsed:.2f} seconds.")
+
+    agg = aggregate_eager_results(df, "svm")
+    print(f"\nSVM Configurations for {dataset_name}:")
+    for idx, row in agg.iterrows():
+        print(
+            f"  #{idx+1}: kernel={row['kernel']:8s} C={row['C']} gamma={row['gamma']:6s} -> "
+            f"Acc: {row['mean_accuracy']*100:.2f}% (std: {row['std_accuracy']*100:.2f}%) "
+            f"Fit: {row['mean_fit_time_s']*1000.0:.2f}ms Eff: {row['mean_efficiency_ms']:.3f}ms"
+        )
+    return df
+
+
+def run_rf_pipeline(
+    dataset_name: str,
+    n_estimators_list: list[int],
+    criteria_list: list[str],
+    max_depth: int | None,
+    random_state: int,
+    n_jobs: int,
+    output_dir: str | Path = "results",
+) -> pd.DataFrame:
+    print("\n========================================================")
+    print(f"Starting Random Forest evaluation pipeline for dataset: {dataset_name}")
+    print(
+        f"Configurations per fold: {len(n_estimators_list)} n_estimators x {len(criteria_list)} criteria = "
+        f"{len(n_estimators_list)*len(criteria_list)}"
+    )
+    print(f"Total evaluations across 10 folds: {10 * len(n_estimators_list)*len(criteria_list)}")
+    print("========================================================")
+
+    t0 = time.perf_counter()
+    df = run_rf_experiments(
+        datasets=[dataset_name],
+        folds=range(10),
+        n_estimators_list=n_estimators_list,
+        criteria_list=criteria_list,
+        max_depth=max_depth,
+        random_state=random_state,
+        n_jobs=n_jobs,
+        data_root="data",
+        output_dir=output_dir,
+    )
+    elapsed = time.perf_counter() - t0
+    print(f"Completed {len(df)} evaluations for '{dataset_name}' in {elapsed:.2f} seconds.")
+
+    agg = aggregate_eager_results(df, "rf")
+    print(f"\nRandom Forest Configurations for {dataset_name}:")
+    for idx, row in agg.iterrows():
+        print(
+            f"  #{idx+1}: n_estimators={row['n_estimators']:3d} crit={row['criterion']:8s} -> "
+            f"Acc: {row['mean_accuracy']*100:.2f}% (std: {row['std_accuracy']*100:.2f}%) "
+            f"Fit: {row['mean_fit_time_s']*1000.0:.2f}ms Eff: {row['mean_efficiency_ms']:.3f}ms"
+        )
+    return df
+
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description="IML Work 2: KNN Experiment Framework")
+    parser = argparse.ArgumentParser(
+        description="IML Work 2: Classification with Lazy Learning, SVM, and RF"
+    )
+
+    # 1. Singular Model Family Selector
+    parser.add_argument(
+        "--model",
+        type=str,
+        default="knn",
+        choices=["knn", "svm", "rf"],
+        help="Model family to run (exactly one: 'knn', 'svm', or 'rf'; default: 'knn')",
+    )
+
+    # 2. Dataset and Output Options
     parser.add_argument(
         "--dataset",
         type=str,
@@ -67,52 +173,214 @@ def main() -> None:
         help="Dataset to run experiments for (default: all)",
     )
     parser.add_argument(
+        "--output_dir",
+        "--output-dir",
+        type=str,
+        default="results",
+        dest="output_dir",
+        help="Base output directory for CSV reports (default: 'results')",
+    )
+    parser.add_argument(
+        "--knn-baseline-dir",
+        type=str,
+        default=None,
+        help="Path to an existing KNN experiment directory for statistical comparison (SVM/RF only)",
+    )
+
+    # 3. KNN Specific Arguments (defaults applied conditionally if --model knn)
+    parser.add_argument(
         "--k",
         nargs="+",
         type=int,
-        default=[1, 3, 5, 7, 9],
-        help="List of k values (default: 1 3 5 7 9)",
+        default=None,
+        help="List of k values for KNN (default: 1 3 5 7 9)",
     )
     parser.add_argument(
         "--distances",
         nargs="+",
         type=str,
-        default=["euclidean", "manhattan", "canberra", "clark", "heom", "ivdm"],
-        help="Distance metrics",
+        default=None,
+        help="Distance metrics for KNN (default: euclidean manhattan canberra clark heom ivdm)",
     )
     parser.add_argument(
         "--voting",
         nargs="+",
         type=str,
-        default=["majority", "inverse_distance"],
-        help="Voting strategies",
+        default=None,
+        help="Voting strategies for KNN (default: majority inverse_distance)",
     )
     parser.add_argument(
         "--retention",
         nargs="+",
         type=str,
-        default=["nr", "ar", "dc", "og"],
-        help="Retention policies",
+        default=None,
+        help="Retention policies for KNN (default: nr ar dc og)",
+    )
+
+    # 4. SVM Specific Arguments
+    parser.add_argument(
+        "--svm-kernels",
+        nargs="+",
+        type=str,
+        choices=["linear", "rbf", "poly", "sigmoid"],
+        default=None,
+        help="Kernels for SVM (default: linear rbf)",
     )
     parser.add_argument(
-        "--output_dir",
+        "--svm-c",
+        type=float,
+        default=None,
+        help="Regularization parameter C for SVM (strictly positive float; default: 1.0)",
+    )
+    parser.add_argument(
+        "--svm-gamma",
         type=str,
-        default="results",
-        help="Output directory for CSV reports",
+        default=None,
+        help="Kernel coefficient gamma for SVM ('scale', 'auto', or a float; default: scale)",
+    )
+
+    # 5. Random Forest Specific Arguments
+    parser.add_argument(
+        "--rf-n-estimators",
+        nargs="+",
+        type=int,
+        default=None,
+        help="List of n_estimators for Random Forest (default: 100 200)",
+    )
+    parser.add_argument(
+        "--rf-criteria",
+        nargs="+",
+        type=str,
+        choices=["gini", "entropy", "log_loss"],
+        default=None,
+        help="Split criteria for Random Forest (default: gini entropy)",
+    )
+    parser.add_argument(
+        "--rf-max-depth",
+        type=int,
+        default=None,
+        help="Max depth for Random Forest trees (optional integer, default: None)",
+    )
+    parser.add_argument(
+        "--random-state",
+        type=int,
+        default=42,
+        help="Random state seed (default: 42)",
+    )
+    parser.add_argument(
+        "--n-jobs",
+        type=int,
+        default=-1,
+        help="Number of parallel jobs for Random Forest (default: -1)",
     )
 
     args = parser.parse_args()
 
-    # Determine output directory (auto-increment results/experiment_results_{N})
+    # Model-Specific Option Dispatches & Incompatibility Validation
+    knn_explicit = {
+        "--k": args.k,
+        "--distances": args.distances,
+        "--voting": args.voting,
+        "--retention": args.retention,
+    }
+    svm_explicit = {
+        "--svm-kernels": args.svm_kernels,
+        "--svm-c": args.svm_c,
+        "--svm-gamma": args.svm_gamma,
+    }
+    rf_explicit = {
+        "--rf-n-estimators": args.rf_n_estimators,
+        "--rf-criteria": args.rf_criteria,
+        "--rf-max-depth": args.rf_max_depth,
+    }
+
+    if args.model == "knn":
+        for opt, val in svm_explicit.items():
+            if val is not None:
+                parser.error(f"{opt} cannot be used when --model knn is selected.")
+        for opt, val in rf_explicit.items():
+            if val is not None:
+                parser.error(f"{opt} cannot be used when --model knn is selected.")
+        if args.knn_baseline_dir is not None:
+            parser.error("--knn-baseline-dir is only applicable for --model svm or --model rf.")
+
+        # Apply KNN defaults
+        k_values = args.k if args.k is not None else [1, 3, 5, 7, 9]
+        distances = (
+            args.distances
+            if args.distances is not None
+            else ["euclidean", "manhattan", "canberra", "clark", "heom", "ivdm"]
+        )
+        voting = (
+            args.voting
+            if args.voting is not None
+            else ["majority", "inverse_distance"]
+        )
+        retention = (
+            args.retention
+            if args.retention is not None
+            else ["nr", "ar", "dc", "og"]
+        )
+
+    elif args.model == "svm":
+        for opt, val in knn_explicit.items():
+            if val is not None:
+                parser.error(f"{opt} cannot be used when --model svm is selected.")
+        for opt, val in rf_explicit.items():
+            if val is not None:
+                parser.error(f"{opt} cannot be used when --model svm is selected.")
+
+        # Apply SVM defaults & validation
+        svm_kernels = args.svm_kernels if args.svm_kernels is not None else ["linear", "rbf"]
+        svm_c = args.svm_c if args.svm_c is not None else 1.0
+        if svm_c <= 0:
+            parser.error(f"--svm-c must be strictly positive, got {svm_c}")
+
+        svm_gamma = args.svm_gamma if args.svm_gamma is not None else "scale"
+        if svm_gamma not in {"scale", "auto"}:
+            try:
+                gamma_float = float(svm_gamma)
+                if gamma_float <= 0:
+                    parser.error(f"--svm-gamma float must be > 0, got {gamma_float}")
+            except ValueError:
+                parser.error(
+                    f"--svm-gamma must be 'scale', 'auto', or a positive float, got '{svm_gamma}'"
+                )
+
+    elif args.model == "rf":
+        for opt, val in knn_explicit.items():
+            if val is not None:
+                parser.error(f"{opt} cannot be used when --model rf is selected.")
+        for opt, val in svm_explicit.items():
+            if val is not None:
+                parser.error(f"{opt} cannot be used when --model rf is selected.")
+
+        # Apply RF defaults & validation
+        rf_n_estimators = (
+            args.rf_n_estimators if args.rf_n_estimators is not None else [100, 200]
+        )
+        for n in rf_n_estimators:
+            if n <= 0:
+                parser.error(f"--rf-n-estimators values must be strictly positive, got {n}")
+
+        rf_criteria = (
+            args.rf_criteria if args.rf_criteria is not None else ["gini", "entropy"]
+        )
+        rf_max_depth = args.rf_max_depth
+        if rf_max_depth is not None and rf_max_depth <= 0:
+            parser.error(f"--rf-max-depth must be strictly positive, got {rf_max_depth}")
+
+    # Resolve output directory with auto-versioning
     if args.output_dir == "results":
         out_dir = get_next_experiment_dir("results")
     else:
         out_dir = Path(args.output_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"\n========================================================")
-    print(f"Output directory: {out_dir}")
-    print(f"========================================================")
+    print("\n========================================================")
+    print(f"Selected Model Family: {args.model.upper()}")
+    print(f"Output directory:      {out_dir}")
+    print("========================================================")
 
     target_datasets = (
         ["heart-statlog", "grid"]
@@ -121,26 +389,92 @@ def main() -> None:
     )
 
     all_dfs = []
-    for ds in target_datasets:
-        df_ds = run_dataset_pipeline(
-            dataset_name=ds,
-            k_values=args.k,
-            distances=args.distances,
-            voting_strategies=args.voting,
-            retention_policies=args.retention,
+
+    # Dispatch to exactly one model family
+    if args.model == "knn":
+        for ds in target_datasets:
+            df_ds = run_knn_pipeline(
+                dataset_name=ds,
+                k_values=k_values,
+                distances=distances,
+                voting_strategies=voting,
+                retention_policies=retention,
+                output_dir=out_dir,
+            )
+            all_dfs.append(df_ds)
+
+        combined_df = pd.concat(all_dfs, ignore_index=True)
+        combined_df.to_csv(out_dir / "all_experiments_results.csv", index=False)
+
+        agg_df, best_df, stat_df = export_evaluation_report(combined_df, output_dir=out_dir)
+        print(f"\nKNN Results successfully saved to {out_dir}:")
+        print(f"  - all_experiments_results.csv ({len(combined_df)} rows)")
+        print(f"  - aggregated_results.csv ({len(agg_df)} rows)")
+        print(f"  - best_configurations.csv ({len(best_df)} rows)")
+        print(f"  - statistical_comparisons.csv ({len(stat_df)} tests)")
+
+    elif args.model == "svm":
+        for ds in target_datasets:
+            df_ds = run_svm_pipeline(
+                dataset_name=ds,
+                kernels=svm_kernels,
+                C=svm_c,
+                gamma=svm_gamma,
+                random_state=args.random_state,
+                output_dir=out_dir,
+            )
+            all_dfs.append(df_ds)
+
+        combined_df = pd.concat(all_dfs, ignore_index=True)
+        combined_df.to_csv(out_dir / "svm_results.csv", index=False)
+
+        agg_df, best_df, stat_df, knn_comp = export_eager_evaluation_report(
+            combined_df,
+            model_type="svm",
             output_dir=out_dir,
+            knn_baseline_dir=args.knn_baseline_dir,
         )
-        all_dfs.append(df_ds)
+        print(f"\nSVM Results successfully saved to {out_dir}:")
+        print(f"  - svm_results.csv ({len(combined_df)} rows)")
+        print(f"  - svm_aggregated_results.csv ({len(agg_df)} rows)")
+        print(f"  - svm_best_configurations.csv ({len(best_df)} rows)")
+        print(f"  - svm_statistical_comparisons.csv ({len(stat_df)} tests)")
+        if knn_comp is not None:
+            print(f"  - model_comparison.csv ({len(knn_comp)} comparisons vs KNN baseline)")
+        else:
+            print("  - (KNN baseline comparison skipped; supply --knn-baseline-dir to compare)")
 
-    combined_df = pd.concat(all_dfs, ignore_index=True)
-    combined_df.to_csv(out_dir / "all_experiments_results.csv", index=False)
+    elif args.model == "rf":
+        for ds in target_datasets:
+            df_ds = run_rf_pipeline(
+                dataset_name=ds,
+                n_estimators_list=rf_n_estimators,
+                criteria_list=rf_criteria,
+                max_depth=rf_max_depth,
+                random_state=args.random_state,
+                n_jobs=args.n_jobs,
+                output_dir=out_dir,
+            )
+            all_dfs.append(df_ds)
 
-    agg_df, best_df, stat_df = export_evaluation_report(combined_df, output_dir=out_dir)
-    print(f"\nResults successfully saved to {out_dir}:")
-    print(f"  - all_experiments_results.csv ({len(combined_df)} rows)")
-    print(f"  - aggregated_results.csv ({len(agg_df)} rows)")
-    print(f"  - best_configurations.csv ({len(best_df)} rows)")
-    print(f"  - statistical_comparisons.csv ({len(stat_df)} tests)")
+        combined_df = pd.concat(all_dfs, ignore_index=True)
+        combined_df.to_csv(out_dir / "rf_results.csv", index=False)
+
+        agg_df, best_df, stat_df, knn_comp = export_eager_evaluation_report(
+            combined_df,
+            model_type="rf",
+            output_dir=out_dir,
+            knn_baseline_dir=args.knn_baseline_dir,
+        )
+        print(f"\nRandom Forest Results successfully saved to {out_dir}:")
+        print(f"  - rf_results.csv ({len(combined_df)} rows)")
+        print(f"  - rf_aggregated_results.csv ({len(agg_df)} rows)")
+        print(f"  - rf_best_configurations.csv ({len(best_df)} rows)")
+        print(f"  - rf_statistical_comparisons.csv ({len(stat_df)} tests)")
+        if knn_comp is not None:
+            print(f"  - model_comparison.csv ({len(knn_comp)} comparisons vs KNN baseline)")
+        else:
+            print("  - (KNN baseline comparison skipped; supply --knn-baseline-dir to compare)")
 
 
 if __name__ == "__main__":

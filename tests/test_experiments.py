@@ -20,7 +20,7 @@ from iml_project.experiments.runner import (
 class ExperimentsTests(unittest.TestCase):
     def test_prepare_fold_data_isolation(self) -> None:
         """Verify prepare_fold_data returns arrays with proper shapes and zero leakage."""
-        X_tr, y_tr, X_te, y_te, metric = prepare_fold_data(
+        X_tr, y_tr, X_te, y_te, _metric = prepare_fold_data(
             "grid", 0, "euclidean", data_root="data"
         )
         self.assertEqual(X_tr.shape[1], 2)
@@ -108,6 +108,7 @@ class ExperimentsTests(unittest.TestCase):
     def test_get_next_experiment_dir(self) -> None:
         """Verify get_next_experiment_dir detects latest number and increments by 1."""
         import tempfile
+
         from iml_project.experiments.evaluation import get_next_experiment_dir
 
         with tempfile.TemporaryDirectory() as tmp_dir:
