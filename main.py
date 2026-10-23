@@ -26,10 +26,14 @@ def run_knn_pipeline(
     distances: list[str],
     voting_strategies: list[str],
     retention_policies: list[str],
+    reduction_method: str | None = None,
+    reduction_distance: str | None = None,
     output_dir: str | Path = "results",
 ) -> pd.DataFrame:
     print("\n========================================================")
     print(f"Starting KNN evaluation pipeline for dataset: {dataset_name}")
+    if reduction_method:
+        print(f"Instance Reduction: {reduction_method.upper()} (reduction distance: {reduction_distance})")
     print(
         f"Configurations per fold: {len(distances)} distances x {len(k_values)} k "
         f"x {len(voting_strategies)} voting x {len(retention_policies)} retention = "
@@ -49,6 +53,8 @@ def run_knn_pipeline(
         k_values=k_values,
         voting_strategies=voting_strategies,
         retention_policies=retention_policies,
+        reduction_method=reduction_method,
+        reduction_distance=reduction_distance,
         data_root="data",
         output_dir=output_dir,
     )
@@ -73,10 +79,14 @@ def run_svm_pipeline(
     C: float,
     gamma: str | float,
     random_state: int,
+    reduction_method: str | None = None,
+    reduction_distance: str | None = None,
     output_dir: str | Path = "results",
 ) -> pd.DataFrame:
     print("\n========================================================")
     print(f"Starting SVM evaluation pipeline for dataset: {dataset_name}")
+    if reduction_method:
+        print(f"Instance Reduction: {reduction_method.upper()} (reduction distance: {reduction_distance})")
     print(f"Configurations per fold: {len(kernels)} kernels (C={C}, gamma={gamma})")
     print(f"Total evaluations across 10 folds: {10 * len(kernels)}")
     print("========================================================")
@@ -89,6 +99,8 @@ def run_svm_pipeline(
         C=C,
         gamma=gamma,
         random_state=random_state,
+        reduction_method=reduction_method,
+        reduction_distance=reduction_distance,
         data_root="data",
         output_dir=output_dir,
     )
@@ -113,10 +125,14 @@ def run_rf_pipeline(
     max_depth: int | None,
     random_state: int,
     n_jobs: int,
+    reduction_method: str | None = None,
+    reduction_distance: str | None = None,
     output_dir: str | Path = "results",
 ) -> pd.DataFrame:
     print("\n========================================================")
     print(f"Starting Random Forest evaluation pipeline for dataset: {dataset_name}")
+    if reduction_method:
+        print(f"Instance Reduction: {reduction_method.upper()} (reduction distance: {reduction_distance})")
     print(
         f"Configurations per fold: {len(n_estimators_list)} n_estimators x {len(criteria_list)} criteria = "
         f"{len(n_estimators_list)*len(criteria_list)}"
@@ -133,6 +149,8 @@ def run_rf_pipeline(
         max_depth=max_depth,
         random_state=random_state,
         n_jobs=n_jobs,
+        reduction_method=reduction_method,
+        reduction_distance=reduction_distance,
         data_root="data",
         output_dir=output_dir,
     )
@@ -164,7 +182,25 @@ def main() -> None:
         help="Model family to run (exactly one: 'knn', 'svm', or 'rf'; default: 'knn')",
     )
 
-    # 2. Dataset and Output Options
+    # 2. Instance Reduction Options (Preprocessing Stage)
+    parser.add_argument(
+        "--reduction-method",
+        "--instance-reduction",
+        type=str,
+        default=None,
+        choices=["fcnn3", "rng2", "drop3"],
+        help="Instance reduction algorithm applied at the preprocessing stage ('fcnn3', 'rng2', 'drop3'; default: None, ignored if not specified)",
+    )
+    parser.add_argument(
+        "--reduction-distance",
+        "--reduction-metric",
+        type=str,
+        default="euclidean",
+        choices=["euclidean", "manhattan", "canberra", "clark", "heom", "ivdm"],
+        help="Distance metric used strictly for instance reduction during preprocessing (separate from KNN distance metrics; default: 'euclidean')",
+    )
+
+    # 3. Dataset and Output Options
     parser.add_argument(
         "--dataset",
         type=str,
@@ -187,7 +223,7 @@ def main() -> None:
         help="Path to an existing KNN experiment directory for statistical comparison (SVM/RF only)",
     )
 
-    # 3. KNN Specific Arguments (defaults applied conditionally if --model knn)
+    # 4. KNN Specific Arguments (defaults applied conditionally if --model knn)
     parser.add_argument(
         "--k",
         nargs="+",
@@ -217,7 +253,7 @@ def main() -> None:
         help="Retention policies for KNN (default: nr ar dc og)",
     )
 
-    # 4. SVM Specific Arguments
+    # 5. SVM Specific Arguments
     parser.add_argument(
         "--svm-kernels",
         nargs="+",
@@ -239,7 +275,7 @@ def main() -> None:
         help="Kernel coefficient gamma for SVM ('scale', 'auto', or a float; default: scale)",
     )
 
-    # 5. Random Forest Specific Arguments
+    # 6. Random Forest Specific Arguments
     parser.add_argument(
         "--rf-n-estimators",
         nargs="+",
@@ -379,6 +415,9 @@ def main() -> None:
 
     print("\n========================================================")
     print(f"Selected Model Family: {args.model.upper()}")
+    print(f"Instance Reduction:    {args.reduction_method.upper() if args.reduction_method else 'None (Full Training Data)'}")
+    if args.reduction_method:
+        print(f"Reduction Distance:    {args.reduction_distance}")
     print(f"Output directory:      {out_dir}")
     print("========================================================")
 
@@ -399,6 +438,8 @@ def main() -> None:
                 distances=distances,
                 voting_strategies=voting,
                 retention_policies=retention,
+                reduction_method=args.reduction_method,
+                reduction_distance=args.reduction_distance,
                 output_dir=out_dir,
             )
             all_dfs.append(df_ds)
@@ -421,6 +462,8 @@ def main() -> None:
                 C=svm_c,
                 gamma=svm_gamma,
                 random_state=args.random_state,
+                reduction_method=args.reduction_method,
+                reduction_distance=args.reduction_distance,
                 output_dir=out_dir,
             )
             all_dfs.append(df_ds)
@@ -453,6 +496,8 @@ def main() -> None:
                 max_depth=rf_max_depth,
                 random_state=args.random_state,
                 n_jobs=args.n_jobs,
+                reduction_method=args.reduction_method,
+                reduction_distance=args.reduction_distance,
                 output_dir=out_dir,
             )
             all_dfs.append(df_ds)

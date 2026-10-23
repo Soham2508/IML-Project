@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import OneHotEncoder
+
+from iml_project.core.instance_reduction import InstanceReducer, get_instance_reducer
 
 
 def infer_feature_type(
@@ -84,7 +87,7 @@ def infer_feature_type(
 
 @dataclass
 class Preprocessor:
-    """Train-only normalization, imputation, and categorical encoding."""
+    """Train-only normalization, imputation, categorical encoding, and optional instance reduction."""
 
     feature_names: list[str]
     feature_types: list[str]
@@ -99,6 +102,10 @@ class Preprocessor:
     inferred_types_: dict[str, str] = field(default_factory=dict)
     inference_provenance_: dict[str, str] = field(default_factory=dict)
     encode_categorical_: bool = True
+    reduction_method_: str | None = None
+    reduction_metric_: str | None = None
+    reduction_kwargs_: dict[str, Any] = field(default_factory=dict)
+    last_reducer_: InstanceReducer | None = None
 
     @classmethod
     def fit(
@@ -109,6 +116,9 @@ class Preprocessor:
         target_name: str,
         encode_categorical: bool = True,
         feature_type_overrides: dict[str, str] | None = None,
+        reduction_method: str | None = None,
+        reduction_metric: str | None = None,
+        reduction_kwargs: dict[str, Any] | None = None,
     ) -> Preprocessor:
         names = list(feature_names)
         types = [str(item).lower() for item in feature_types]
@@ -116,7 +126,6 @@ class Preprocessor:
             raise ValueError("Feature names and feature types lengths do not match.")
 
         overrides = feature_type_overrides or {}
-        # input_features = [name for name in names if name != target_name]
 
         numeric_features: list[str] = []
         categorical_features: list[str] = []
@@ -183,6 +192,9 @@ class Preprocessor:
             inferred_types_=inferred_types,
             inference_provenance_=inference_provenance,
             encode_categorical_=encode_categorical,
+            reduction_method_=reduction_method,
+            reduction_metric_=reduction_metric,
+            reduction_kwargs_=reduction_kwargs or {},
         )
 
     def transform(self, frame: pd.DataFrame) -> pd.DataFrame:
@@ -231,6 +243,48 @@ class Preprocessor:
 
         return transformed
 
+    def reduce_training_data(
+        self,
+        X_train: np.ndarray | pd.DataFrame,
+        y_train: Sequence[Any] | pd.Series,
+    ) -> tuple[np.ndarray | pd.DataFrame, Sequence[Any] | pd.Series]:
+        """Apply instance reduction to training features and labels if configured.
+
+        If reduction_method_ is None or 'none', returns X_train and y_train untouched.
+        """
+        if not self.reduction_method_ or str(self.reduction_method_).lower() == "none":
+            return X_train, y_train
+
+        reducer = get_instance_reducer(
+            self.reduction_method_,
+            distance_metric=self.reduction_metric_,
+            **self.reduction_kwargs_,
+        )
+        X_red, y_red = reducer.fit_resample(X_train, y_train)
+        self.last_reducer_ = reducer
+        return X_red, y_red
+
+
+def apply_instance_reduction(
+    X: Any,
+    y: Any,
+    method: str | None = None,
+    distance_metric: str | Any | None = None,
+    **kwargs: Any,
+) -> tuple[Any, Any]:
+    """Apply instance reduction to training feature and target vectors.
+
+    If method is None or 'none', returns X and y without modification.
+    """
+    if not method or str(method).lower() == "none":
+        return X, y
+    reducer = get_instance_reducer(
+        method,
+        distance_metric=distance_metric,
+        **kwargs,
+    )
+    return reducer.fit_resample(X, y)
+
 
 def fit_and_transform(
     train_df: pd.DataFrame,
@@ -240,6 +294,8 @@ def fit_and_transform(
     target_name: str,
     encode_categorical: bool = True,
     feature_type_overrides: dict[str, str] | None = None,
+    reduction_method: str | None = None,
+    reduction_metric: str | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, Preprocessor]:
     preprocessor = Preprocessor.fit(
         train_df,
@@ -248,6 +304,8 @@ def fit_and_transform(
         target_name,
         encode_categorical=encode_categorical,
         feature_type_overrides=feature_type_overrides,
+        reduction_method=reduction_method,
+        reduction_metric=reduction_metric,
     )
     transformed_train = preprocessor.transform(train_df)
     transformed_test = preprocessor.transform(test_df)
