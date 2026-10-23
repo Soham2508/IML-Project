@@ -1,18 +1,20 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections import Counter
 from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
 
+from iml_project.core.voting import MajorityVoting
 from iml_project.utils.distance_metrics import (
     DistanceMetric,
     EuclideanDistance,
     IVDMDistance,
     get_distance_metric,
 )
+
+_MAJORITY_VOTER = MajorityVoting()
 
 
 class InstanceReducer(ABC):
@@ -124,21 +126,12 @@ class InstanceReducer(ABC):
         y_arr: np.ndarray,
         distances: np.ndarray,
     ) -> Any:
-        """Deterministic majority vote among neighbours with distance and string tie-breaking."""
+        """Deterministic majority vote among neighbours using MajorityVoting."""
         if not neighbor_indices:
             return None
-        labels = [y_arr[i] for i in neighbor_indices]
-        counts = Counter(labels)
-        max_count = max(counts.values())
-        tied = [c for c, cnt in counts.items() if cnt == max_count]
-        if len(tied) == 1:
-            return tied[0]
-        # Tie-break: closest neighbor among tied classes, then string representation
-        min_dist_by_class = {
-            c: min(distances[i] for i in neighbor_indices if y_arr[i] == c)
-            for c in tied
-        }
-        return min(tied, key=lambda c: (min_dist_by_class[c], str(c)))
+        neighbor_classes = [y_arr[i] for i in neighbor_indices]
+        neighbor_distances = [distances[i] for i in neighbor_indices]
+        return _MAJORITY_VOTER.decide(neighbor_classes, neighbor_distances)
 
     @abstractmethod
     def fit_resample(self, X: Any, y: Any) -> tuple[Any, Any]:
