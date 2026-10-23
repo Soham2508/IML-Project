@@ -66,6 +66,11 @@ IML-Project/
    python -m venv .venv
    source .venv/bin/activate
    ```
+   Linux
+   ```shell
+   python -m venv .venv
+   source .venv/bin/activate
+   ```
 
 2. Install dependencies:
    
@@ -75,6 +80,10 @@ IML-Project/
    ```
    MacOS
    ```zsh
+   pip install -r requirements.txt
+   ```
+   Linux
+   ```shell
    pip install -r requirements.txt
    ```
 ---
@@ -89,9 +98,13 @@ $env:PYTHONPATH="src"
 python -m unittest discover tests
 ```
 MacOS
-   ```zsh
-   PYTHONPATH=src python -m unittest discover tests
-   ```
+```zsh
+PYTHONPATH=src python -m unittest discover tests
+```
+Linux
+```shell
+PYTHONPATH=src python -m unittest discover tests
+```
 
 To run code quality and linting checks:
 
@@ -100,9 +113,13 @@ Windows
 ruff check src tests main.py
 ```
 MacOS
-   ```zsh
-   ruff check src tests main.py
-   ```
+```zsh
+ruff check src tests main.py
+```
+Linux
+```shell
+ruff check src tests main.py
+```
 ---
 
 ## Running Experiments via CLI
@@ -120,6 +137,10 @@ python main.py --model knn --dataset heart-statlog --k 1 3 5 7 9
 ```
 MacOS
 ```zsh
+PYTHONPATH=src python main.py --model knn --dataset heart-statlog --k 1 3 5 7 9
+```
+Linux
+```shell
 PYTHONPATH=src python main.py --model knn --dataset heart-statlog --k 1 3 5 7 9
 ```
 *Customizing KNN options:*
@@ -142,7 +163,10 @@ MacOS
 ```zsh
 PYTHONPATH=src python main.py --model svm --dataset heart-statlog --knn-baseline-dir results/experiment_results_1
 ```
-
+Linux
+```shell
+PYTHONPATH=src python main.py --model svm --dataset heart-statlog --knn-baseline-dir results/experiment_results_1
+```
 *Customizing SVM options:*
 
 - `--svm-kernels`: List of kernels (`linear`, `rbf`, `poly`, `sigmoid`; default: `linear`, `rbf`)
@@ -160,6 +184,10 @@ python main.py --model rf --dataset heart-statlog --knn-baseline-dir results/exp
 ```
 MacOS
 ```zsh
+PYTHONPATH=src python main.py --model rf --dataset heart-statlog --knn-baseline-dir results/experiment_results_1
+```
+Linux
+```shell
 PYTHONPATH=src python main.py --model rf --dataset heart-statlog --knn-baseline-dir results/experiment_results_1
 ```
 *Customizing Random Forest options:*
