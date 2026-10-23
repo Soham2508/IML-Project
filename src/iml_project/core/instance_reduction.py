@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections import Counter
+from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
@@ -17,11 +18,130 @@ from iml_project.utils.distance_metrics import (
 class InstanceReducer(ABC):
     """Base interface for instance-reduction algorithms."""
 
-    def __init__(self, distance_metric: DistanceMetric):
-        self.distance_metric = distance_metric
+    def __init__(
+        self, distance_metric: DistanceMetric | str | None = None
+    ) -> None:
+        if distance_metric is None:
+            distance_metric = EuclideanDistance()
+        elif isinstance(distance_metric, str):
+            distance_metric = get_distance_metric(distance_metric)
+        self.distance_metric: DistanceMetric = distance_metric
+        self.selected_indices_: list[int] = []
+        self.removed_indices_: list[int] = []
+
+    @staticmethod
+    def _format_empty(X: Any, y: Any) -> tuple[Any, Any]:
+        """Return appropriately typed empty datasets matching inputs."""
+        if hasattr(X, "iloc"):
+            return X.iloc[[]], y.iloc[[]]
+        if isinstance(y, list):
+            return (
+                np.empty((0, 0) if not hasattr(X, "shape") else (0, X.shape[1])),
+                [],
+            )
+        return (
+            np.empty((0, 0) if not hasattr(X, "shape") else (0, X.shape[1])),
+            np.empty(0, dtype=getattr(y, "dtype", object)),
+        )
+
+    @staticmethod
+    def _format_output(
+        X: Any,
+        y: Any,
+        X_arr: np.ndarray,
+        y_arr: np.ndarray,
+        indices: list[int],
+    ) -> tuple[Any, Any]:
+        """Slice features and targets while preserving original data container types."""
+        if hasattr(X, "iloc"):
+            X_reduced = X.iloc[indices]
+        else:
+            X_reduced = X_arr[indices]
+
+        if hasattr(y, "iloc"):
+            y_reduced = y.iloc[indices]
+        elif isinstance(y, list):
+            y_reduced = [y[i] for i in indices]
+        else:
+            y_reduced = y_arr[indices]
+
+        return X_reduced, y_reduced
+
+    def _prepare_inputs(
+        self, X: Any, y: Any
+    ) -> tuple[np.ndarray | None, np.ndarray | None, tuple[Any, Any] | None]:
+        """Validate input dimensions, handle trivial cases, and convert to numpy arrays."""
+        if len(X) != len(y):
+            raise ValueError(
+                f"X and y must have the same length. Got len(X)={len(X)}, len(y)={len(y)}."
+            )
+
+        n_samples = len(X)
+        if n_samples == 0:
+            self.selected_indices_ = []
+            self.removed_indices_ = []
+            return None, None, self._format_empty(X, y)
+
+        if n_samples == 1:
+            self.selected_indices_ = [0]
+            self.removed_indices_ = []
+            return None, None, (X, y)
+
+        # Convert to numpy arrays for internal calculations
+        if isinstance(X, np.ndarray):
+            X_arr = X
+        elif hasattr(X, "to_numpy"):
+            X_arr = X.to_numpy()
+        else:
+            X_arr = np.asarray(X)
+
+        if isinstance(y, (np.ndarray, list)):
+            y_arr = np.asarray(y)
+        elif hasattr(y, "to_numpy"):
+            y_arr = y.to_numpy()
+        else:
+            y_arr = np.asarray(y)
+
+        # Fit IVDM metric if applicable and not already fitted
+        if isinstance(self.distance_metric, IVDMDistance) and not getattr(
+            self.distance_metric, "is_fitted", False
+        ):
+            self.distance_metric.fit(X_arr, y_arr)
+
+        return X_arr, y_arr, None
+
+    def _compute_pairwise_distances(self, X_arr: np.ndarray) -> np.ndarray:
+        """Precompute pairwise distance matrix D_mat for all instances."""
+        n_samples = len(X_arr)
+        D_mat = np.zeros((n_samples, n_samples), dtype=np.float64)
+        for i in range(n_samples):
+            D_mat[i] = self.distance_metric.compute_all(X_arr[i], X_arr)
+        return D_mat
+
+    @staticmethod
+    def _majority_vote(
+        neighbor_indices: Sequence[int],
+        y_arr: np.ndarray,
+        distances: np.ndarray,
+    ) -> Any:
+        """Deterministic majority vote among neighbours with distance and string tie-breaking."""
+        if not neighbor_indices:
+            return None
+        labels = [y_arr[i] for i in neighbor_indices]
+        counts = Counter(labels)
+        max_count = max(counts.values())
+        tied = [c for c, cnt in counts.items() if cnt == max_count]
+        if len(tied) == 1:
+            return tied[0]
+        # Tie-break: closest neighbor among tied classes, then string representation
+        min_dist_by_class = {
+            c: min(distances[i] for i in neighbor_indices if y_arr[i] == c)
+            for c in tied
+        }
+        return min(tied, key=lambda c: (min_dist_by_class[c], str(c)))
 
     @abstractmethod
-    def fit_resample(self, X, y):
+    def fit_resample(self, X: Any, y: Any) -> tuple[Any, Any]:
         """
         Reduce the training instances.
 
@@ -47,14 +167,6 @@ class FCNN3(InstanceReducer):
     vol. 19, no. 11, pp. 1450-1464, Nov. 2007.
     """
 
-    def __init__(self, distance_metric: DistanceMetric | str | None = None) -> None:
-        if distance_metric is None:
-            distance_metric = EuclideanDistance()
-        elif isinstance(distance_metric, str):
-            distance_metric = get_distance_metric(distance_metric)
-        super().__init__(distance_metric=distance_metric)
-        self.selected_indices_: list[int] = []
-
     def fit_resample(self, X: Any, y: Any) -> tuple[Any, Any]:
         """
         Reduce the training instances using FCNN3.
@@ -73,50 +185,12 @@ class FCNN3(InstanceReducer):
         y_reduced : array-like, pd.Series, or list
             Reduced target labels.
         """
-        if len(X) != len(y):
-            raise ValueError(
-                f"X and y must have the same length. Got len(X)={len(X)}, len(y)={len(y)}."
-            )
+        X_arr, y_arr, early_return = self._prepare_inputs(X, y)
+        if early_return is not None:
+            return early_return
+        assert X_arr is not None and y_arr is not None
 
-        n_samples = len(X)
-        if n_samples == 0:
-            self.selected_indices_ = []
-            if hasattr(X, "iloc"):
-                return X.iloc[[]], y.iloc[[]]
-            if isinstance(y, list):
-                return (
-                    np.empty((0, 0) if not hasattr(X, "shape") else (0, X.shape[1])),
-                    [],
-                )
-            return (
-                np.empty((0, 0) if not hasattr(X, "shape") else (0, X.shape[1])),
-                np.empty(0, dtype=getattr(y, "dtype", object)),
-            )
-
-        if n_samples == 1:
-            self.selected_indices_ = [0]
-            return X, y
-
-        # Convert to numpy arrays for internal calculations
-        if isinstance(X, np.ndarray):
-            X_arr = X
-        elif hasattr(X, "to_numpy"):
-            X_arr = X.to_numpy()
-        else:
-            X_arr = np.asarray(X)
-
-        if isinstance(y, (np.ndarray, list)):
-            y_arr = np.asarray(y)
-        elif hasattr(y, "to_numpy"):
-            y_arr = y.to_numpy()
-        else:
-            y_arr = np.asarray(y)
-
-        # Fit IVDM metric if applicable and not already fitted
-        if isinstance(self.distance_metric, IVDMDistance) and not getattr(
-            self.distance_metric, "is_fitted", False
-        ):
-            self.distance_metric.fit(X_arr, y_arr)
+        n_samples = len(X_arr)
 
         # Step 1: Find a most populated class c* in T
         classes, counts = np.unique(y_arr, return_counts=True)
@@ -144,13 +218,10 @@ class FCNN3(InstanceReducer):
                     mu_c_star[col_idx] = vals[np.argmax(val_counts)]
 
         # Step 3: Choose p0, actual training instance in class c* closest to mu[c*]
-        best_dist_to_mean = float("inf")
-        p_0 = c_star_indices[0]
-        for idx in c_star_indices:
-            dist = self.distance_metric.compute(X_arr[idx], mu_c_star)
-            if dist < best_dist_to_mean:
-                best_dist_to_mean = dist
-                p_0 = idx
+        p_0 = min(
+            c_star_indices,
+            key=lambda idx: self.distance_metric.compute(X_arr[idx], mu_c_star),
+        )
 
         # Step 4: Initialize S = {p0}
         S: list[int] = [p_0]
@@ -211,21 +282,9 @@ class FCNN3(InstanceReducer):
                     best_p[i] = q_star
 
         self.selected_indices_ = S
+        self.removed_indices_ = [i for i in range(n_samples) if i not in S_set]
 
-        # Return reduced feature set and labels matching original input types
-        if hasattr(X, "iloc"):
-            X_reduced = X.iloc[S]
-        else:
-            X_reduced = X_arr[S]
-
-        if hasattr(y, "iloc"):
-            y_reduced = y.iloc[S]
-        elif isinstance(y, list):
-            y_reduced = [y[i] for i in S]
-        else:
-            y_reduced = y_arr[S]
-
-        return X_reduced, y_reduced
+        return self._format_output(X, y, X_arr, y_arr, S)
 
 
 class RNG2(InstanceReducer):
@@ -245,15 +304,6 @@ class RNG2(InstanceReducer):
     Letters, vol. 18, pp. 507-513, 1997.
     """
 
-    def __init__(self, distance_metric: DistanceMetric | str | None = None) -> None:
-        if distance_metric is None:
-            distance_metric = EuclideanDistance()
-        elif isinstance(distance_metric, str):
-            distance_metric = get_distance_metric(distance_metric)
-        super().__init__(distance_metric=distance_metric)
-        self.selected_indices_: list[int] = []
-        self.removed_indices_: list[int] = []
-
     def fit_resample(self, X: Any, y: Any) -> tuple[Any, Any]:
         """
         Reduce the training instances using RNG2 editing.
@@ -272,61 +322,18 @@ class RNG2(InstanceReducer):
         y_reduced : array-like, pd.Series, or list
             Edited target labels.
         """
-        if len(X) != len(y):
-            raise ValueError(
-                f"X and y must have the same length. Got len(X)={len(X)}, len(y)={len(y)}."
-            )
+        X_arr, y_arr, early_return = self._prepare_inputs(X, y)
+        if early_return is not None:
+            return early_return
+        assert X_arr is not None and y_arr is not None
 
-        n_samples = len(X)
-        if n_samples == 0:
-            self.selected_indices_ = []
-            self.removed_indices_ = []
-            if hasattr(X, "iloc"):
-                return X.iloc[[]], y.iloc[[]]
-            if isinstance(y, list):
-                return (
-                    np.empty((0, 0) if not hasattr(X, "shape") else (0, X.shape[1])),
-                    [],
-                )
-            return (
-                np.empty((0, 0) if not hasattr(X, "shape") else (0, X.shape[1])),
-                np.empty(0, dtype=getattr(y, "dtype", object)),
-            )
-
-        if n_samples == 1:
-            self.selected_indices_ = [0]
-            self.removed_indices_ = []
-            return X, y
-
-        # Convert to numpy arrays for internal calculations
-        if isinstance(X, np.ndarray):
-            X_arr = X
-        elif hasattr(X, "to_numpy"):
-            X_arr = X.to_numpy()
-        else:
-            X_arr = np.asarray(X)
-
-        if isinstance(y, (np.ndarray, list)):
-            y_arr = np.asarray(y)
-        elif hasattr(y, "to_numpy"):
-            y_arr = y.to_numpy()
-        else:
-            y_arr = np.asarray(y)
-
-        # Fit IVDM metric if applicable and not already fitted
-        if isinstance(self.distance_metric, IVDMDistance) and not getattr(
-            self.distance_metric, "is_fitted", False
-        ):
-            self.distance_metric.fit(X_arr, y_arr)
+        n_samples = len(X_arr)
 
         # Step 1: Precompute pairwise distance matrix
-        D_mat = np.zeros((n_samples, n_samples), dtype=np.float64)
-        for i in range(n_samples):
-            D_mat[i] = self.distance_metric.compute_all(X_arr[i], X_arr)
+        D_mat = self._compute_pairwise_distances(X_arr)
 
         # Step 2: Construct the Relative Neighbourhood Graph (RNG)
         # (x_i, x_j) in E <=> for all k != i, j: d(x_i, x_j) <= max(d(x_i, x_k), d(x_j, x_k))
-        # Equivalently, no k has max(d(x_i, x_k), d(x_j, x_k)) < d(x_i, x_j)
         adj: list[list[int]] = [[] for _ in range(n_samples)]
         for i in range(n_samples):
             for j in range(i + 1, n_samples):
@@ -347,22 +354,7 @@ class RNG2(InstanceReducer):
                 continue
 
             # First-order graph-neighbour vote
-            neighbor_labels = [y_arr[q] for q in N_p]
-            label_counts = Counter(neighbor_labels)
-            max_count = max(label_counts.values())
-            top_classes = [c for c, cnt in label_counts.items() if cnt == max_count]
-
-            # Deterministic tie-breaking using closest neighbor among tied classes, then string sort
-            if len(top_classes) == 1:
-                y_hat = top_classes[0]
-            else:
-                min_dist_by_class = {
-                    c: min(D_mat[p, q] for q in N_p if y_arr[q] == c)
-                    for c in top_classes
-                }
-                y_hat = min(
-                    top_classes, key=lambda c: (min_dist_by_class[c], str(c))
-                )
+            y_hat = self._majority_vote(N_p, y_arr, D_mat[p])
 
             # First-order test: candidate only considered for removal if misclassified
             if y_hat != y_arr[p]:
@@ -389,20 +381,7 @@ class RNG2(InstanceReducer):
         self.selected_indices_ = selected_indices
         self.removed_indices_ = sorted(R)
 
-        # Return reduced feature set and labels matching original input types
-        if hasattr(X, "iloc"):
-            X_reduced = X.iloc[selected_indices]
-        else:
-            X_reduced = X_arr[selected_indices]
-
-        if hasattr(y, "iloc"):
-            y_reduced = y.iloc[selected_indices]
-        elif isinstance(y, list):
-            y_reduced = [y[i] for i in selected_indices]
-        else:
-            y_reduced = y_arr[selected_indices]
-
-        return X_reduced, y_reduced
+        return self._format_output(X, y, X_arr, y_arr, selected_indices)
 
 
 RNGE = RNG2
@@ -433,14 +412,8 @@ class DROP3(InstanceReducer):
     ) -> None:
         if k < 1:
             raise ValueError(f"k must be at least 1, got {k}.")
-        if distance_metric is None:
-            distance_metric = EuclideanDistance()
-        elif isinstance(distance_metric, str):
-            distance_metric = get_distance_metric(distance_metric)
         super().__init__(distance_metric=distance_metric)
         self.k = k
-        self.selected_indices_: list[int] = []
-        self.removed_indices_: list[int] = []
 
     def fit_resample(self, X: Any, y: Any) -> tuple[Any, Any]:
         """
@@ -460,81 +433,15 @@ class DROP3(InstanceReducer):
         y_reduced : array-like, pd.Series, or list
             Reduced target labels.
         """
-        if len(X) != len(y):
-            raise ValueError(
-                f"X and y must have the same length. Got len(X)={len(X)}, len(y)={len(y)}."
-            )
+        X_arr, y_arr, early_return = self._prepare_inputs(X, y)
+        if early_return is not None:
+            return early_return
+        assert X_arr is not None and y_arr is not None
 
-        n_samples = len(X)
-        if n_samples == 0:
-            self.selected_indices_ = []
-            self.removed_indices_ = []
-            if hasattr(X, "iloc"):
-                return X.iloc[[]], y.iloc[[]]
-            if isinstance(y, list):
-                return (
-                    np.empty((0, 0) if not hasattr(X, "shape") else (0, X.shape[1])),
-                    [],
-                )
-            return (
-                np.empty((0, 0) if not hasattr(X, "shape") else (0, X.shape[1])),
-                np.empty(0, dtype=getattr(y, "dtype", object)),
-            )
-
-        if n_samples == 1:
-            self.selected_indices_ = [0]
-            self.removed_indices_ = []
-            return X, y
-
-        # Convert to numpy arrays for internal calculations
-        if isinstance(X, np.ndarray):
-            X_arr = X
-        elif hasattr(X, "to_numpy"):
-            X_arr = X.to_numpy()
-        else:
-            X_arr = np.asarray(X)
-
-        if isinstance(y, (np.ndarray, list)):
-            y_arr = np.asarray(y)
-        elif hasattr(y, "to_numpy"):
-            y_arr = y.to_numpy()
-        else:
-            y_arr = np.asarray(y)
-
-        # Fit IVDM metric if applicable and not already fitted
-        if isinstance(self.distance_metric, IVDMDistance) and not getattr(
-            self.distance_metric, "is_fitted", False
-        ):
-            self.distance_metric.fit(X_arr, y_arr)
+        n_samples = len(X_arr)
 
         # Precompute pairwise distance matrix D_mat
-        D_mat = np.zeros((n_samples, n_samples), dtype=np.float64)
-        for i in range(n_samples):
-            D_mat[i] = self.distance_metric.compute_all(X_arr[i], X_arr)
-
-        def _majority_vote(
-            neighbor_indices: list[int],
-            D_row: np.ndarray,
-        ) -> Any:
-            if not neighbor_indices:
-                return None
-            labels = [y_arr[i] for i in neighbor_indices]
-            counts = Counter(labels)
-            max_count = max(counts.values())
-            tied = [c for c, cnt in counts.items() if cnt == max_count]
-            if len(tied) == 1:
-                return tied[0]
-            # Tie-break: closest neighbor among tied classes, then string sort
-            min_dist_by_class: dict[Any, float] = {}
-            for i in neighbor_indices:
-                c = y_arr[i]
-                if c in tied:
-                    d = D_row[i]
-                    if c not in min_dist_by_class or d < min_dist_by_class[c]:
-                        min_dist_by_class[c] = float(d)
-            return min(
-                tied, key=lambda c: (min_dist_by_class.get(c, float("inf")), str(c))
-            )
+        D_mat = self._compute_pairwise_distances(X_arr)
 
         # Step 1: Initialize S <- copy(T)
         S_set: set[int] = set(range(n_samples))
@@ -551,7 +458,7 @@ class DROP3(InstanceReducer):
                 # k nearest instances to P in S \ {P}
                 sorted_eligible = sorted(eligible, key=lambda s: (D_mat[P, s], s))
                 neighbors_P = sorted_eligible[:k_eff]
-                pred_P = _majority_vote(neighbors_P, D_mat[P])
+                pred_P = self._majority_vote(neighbors_P, y_arr, D_mat[P])
                 if pred_P != y_arr[P] and len(S_set) > 1:
                     S_set.remove(P)
 
@@ -577,11 +484,10 @@ class DROP3(InstanceReducer):
 
         # Maintain sorted nearest eligible neighbours in S for each instance A in T
         # For A in T, eligible neighbours in S are S \ {A}
-        neighbors: dict[int, list[int]] = {}
-        for A in range(n_samples):
-            neighbors[A] = sorted(
-                [s for s in S_set if s != A], key=lambda s: (D_mat[A, s], s)
-            )
+        neighbors: dict[int, list[int]] = {
+            A: sorted([s for s in S_set if s != A], key=lambda s: (D_mat[A, s], s))
+            for A in range(n_samples)
+        }
 
         for P in ORDER:
             if P not in S_set:
@@ -592,11 +498,11 @@ class DROP3(InstanceReducer):
 
             # ASSOC: current associates of P among instances in T
             # (instances in T whose current first k neighbours in S include P)
-            assoc: list[int] = []
-            for A in range(n_samples):
-                k_curr = min(self.k, len(neighbors[A]))
-                if P in neighbors[A][:k_curr]:
-                    assoc.append(A)
+            assoc = [
+                A
+                for A in range(n_samples)
+                if P in neighbors[A][: min(self.k, len(neighbors[A]))]
+            ]
 
             with_count = 0
             without_count = 0
@@ -605,7 +511,7 @@ class DROP3(InstanceReducer):
                 # With P present
                 k_curr = min(self.k, len(neighbors[A]))
                 nbrs_with = neighbors[A][:k_curr]
-                pred_with = _majority_vote(nbrs_with, D_mat[A])
+                pred_with = self._majority_vote(nbrs_with, y_arr, D_mat[A])
                 if pred_with == y_arr[A]:
                     with_count += 1
 
@@ -613,7 +519,7 @@ class DROP3(InstanceReducer):
                 nbrs_without_full = [s for s in neighbors[A] if s != P]
                 k_without = min(self.k, len(nbrs_without_full))
                 nbrs_without = nbrs_without_full[:k_without]
-                pred_without = _majority_vote(nbrs_without, D_mat[A])
+                pred_without = self._majority_vote(nbrs_without, y_arr, D_mat[A])
                 if pred_without == y_arr[A]:
                     without_count += 1
 
@@ -626,24 +532,10 @@ class DROP3(InstanceReducer):
                         neighbors[A].remove(P)
 
         selected_indices = sorted(S_set)
-        removed_indices = [i for i in range(n_samples) if i not in S_set]
         self.selected_indices_ = selected_indices
-        self.removed_indices_ = removed_indices
+        self.removed_indices_ = [i for i in range(n_samples) if i not in S_set]
 
-        # Return reduced feature set and labels matching original input types
-        if hasattr(X, "iloc"):
-            X_reduced = X.iloc[selected_indices]
-        else:
-            X_reduced = X_arr[selected_indices]
-
-        if hasattr(y, "iloc"):
-            y_reduced = y.iloc[selected_indices]
-        elif isinstance(y, list):
-            y_reduced = [y[i] for i in selected_indices]
-        else:
-            y_reduced = y_arr[selected_indices]
-
-        return X_reduced, y_reduced
+        return self._format_output(X, y, X_arr, y_arr, selected_indices)
 
 
 def get_instance_reducer(
@@ -670,5 +562,3 @@ def get_instance_reducer(
         raise ValueError(
             f"Unknown instance reduction method '{name}'. Supported methods: 'fcnn3', 'rng2', 'drop3'."
         )
-
-
