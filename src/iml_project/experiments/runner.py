@@ -30,6 +30,8 @@ class ExperimentConfig:
     k: int
     voting_strategy: str
     retention_policy: str
+    reduction_method: str = "none"
+    reduction_distance: str = "none"
 
 
 @dataclass
@@ -53,6 +55,8 @@ class ExperimentResult:
     precision_macro: float = 0.0
     recall_macro: float = 0.0
     f1_macro: float = 0.0
+    reduction_method: str = "none"
+    reduction_distance: str = "none"
 
 
 def prepare_fold_data(
@@ -60,6 +64,8 @@ def prepare_fold_data(
     fold: int,
     distance_metric_name: str,
     data_root: str | Path = "data",
+    reduction_method: str | None = None,
+    reduction_distance: str | None = None,
 ) -> tuple[np.ndarray, list[Any], np.ndarray, list[Any], DistanceMetric]:
     """Load and preprocess fold data with zero test leakage, tailored to the chosen distance metric."""
     train_df, test_df, names, types, target_name = load_dataset_fold(
@@ -69,12 +75,43 @@ def prepare_fold_data(
     # HEOM and IVDM need intact nominal columns and normalized numeric columns
     use_raw_categoricals = distance_metric_name.lower() in {"heom", "ivdm"}
 
+    # Build metric instance for KNN
+    if use_raw_categoricals:
+        num_indices = [
+            i for i, t in enumerate(types) if names[i] != target_name and t.lower() not in {"nominal", "categorical"}
+        ]
+        nom_indices = [
+            i for i, t in enumerate(types) if names[i] != target_name and t.lower() in {"nominal", "categorical"}
+        ]
+        knn_metric = get_distance_metric(
+            distance_metric_name,
+            numeric_indices=num_indices,
+            nominal_indices=nom_indices,
+        )
+    else:
+        knn_metric = get_distance_metric(distance_metric_name)
+
+    # Build reduction metric instance if reduction is requested
+    red_metric_obj: DistanceMetric | str | None = None
+    if reduction_method and str(reduction_method).lower() != "none":
+        red_metric_name = reduction_distance or "euclidean"
+        if red_metric_name.lower() in {"heom", "ivdm"} and use_raw_categoricals:
+            red_metric_obj = get_distance_metric(
+                red_metric_name,
+                numeric_indices=num_indices,
+                nominal_indices=nom_indices,
+            )
+        else:
+            red_metric_obj = get_distance_metric(red_metric_name)
+
     preprocessor = Preprocessor.fit(
         train_df,
         feature_names=names,
         feature_types=types,
         target_name=target_name,
         encode_categorical=not use_raw_categoricals,
+        reduction_method=reduction_method,
+        reduction_metric=red_metric_obj,
     )
 
     trans_train = preprocessor.transform(train_df)
@@ -86,30 +123,41 @@ def prepare_fold_data(
     X_test = trans_test[pred_cols].to_numpy()
     y_test = trans_test[target_name].tolist()
 
-    # Determine metric indices and build metric instance
+    # Apply instance reduction at the preprocessing stage
+    if reduction_method and str(reduction_method).lower() != "none":
+        X_train, y_train = preprocessor.reduce_training_data(X_train, y_train)
+        if isinstance(y_train, np.ndarray):
+            y_train = y_train.tolist()
+
+    # Re-instantiate KNN metric if columns changed (e.g. after one-hot encoding)
     if use_raw_categoricals:
         num_indices = [i for i, c in enumerate(pred_cols) if c in preprocessor.numeric_features_]
         nom_indices = [i for i, c in enumerate(pred_cols) if c in preprocessor.categorical_features_]
-        metric = get_distance_metric(
+        knn_metric = get_distance_metric(
             distance_metric_name,
             numeric_indices=num_indices,
             nominal_indices=nom_indices,
         )
-    else:
-        metric = get_distance_metric(distance_metric_name)
 
-    return X_train, y_train, X_test, y_test, metric
+    return X_train, y_train, X_test, y_test, knn_metric
 
 
 def prepare_eager_fold_data(
     dataset: str,
     fold: int,
     data_root: str | Path = "data",
+    reduction_method: str | None = None,
+    reduction_distance: str | None = None,
 ) -> tuple[np.ndarray, list[Any], np.ndarray, list[Any]]:
     """Load and preprocess fold data for eager models (SVM, RF) with zero test leakage."""
     train_df, test_df, names, types, target_name = load_dataset_fold(
         dataset, fold, data_root
     )
+
+    red_metric_obj: DistanceMetric | str | None = None
+    if reduction_method and str(reduction_method).lower() != "none":
+        red_metric_name = reduction_distance or "euclidean"
+        red_metric_obj = get_distance_metric(red_metric_name)
 
     preprocessor = Preprocessor.fit(
         train_df,
@@ -117,6 +165,8 @@ def prepare_eager_fold_data(
         feature_types=types,
         target_name=target_name,
         encode_categorical=True,
+        reduction_method=reduction_method,
+        reduction_metric=red_metric_obj,
     )
 
     trans_train = preprocessor.transform(train_df)
@@ -127,6 +177,13 @@ def prepare_eager_fold_data(
     y_train = trans_train[target_name].tolist()
     X_test = trans_test[pred_cols].to_numpy(dtype=np.float64)
     y_test = trans_test[target_name].tolist()
+
+    # Apply instance reduction at the preprocessing stage
+    if reduction_method and str(reduction_method).lower() != "none":
+        X_train, y_train = preprocessor.reduce_training_data(X_train, y_train)
+        X_train = np.asarray(X_train, dtype=np.float64)
+        if isinstance(y_train, np.ndarray):
+            y_train = y_train.tolist()
 
     return X_train, y_train, X_test, y_test
 
@@ -141,6 +198,8 @@ def run_single_experiment(
         config.fold,
         config.distance_metric,
         data_root=data_root,
+        reduction_method=config.reduction_method,
+        reduction_distance=config.reduction_distance,
     )
 
     voting = get_voting_strategy(config.voting_strategy)
@@ -176,6 +235,8 @@ def run_single_experiment(
         retention_ratio=eval_metrics["retention_ratio"],
         mean_prediction_time=eval_metrics["mean_prediction_time"],
         total_prediction_time=eval_metrics["total_prediction_time"],
+        reduction_method=config.reduction_method,
+        reduction_distance=config.reduction_distance,
     )
 
 
@@ -193,6 +254,8 @@ def run_experiment_matrix(
     k_values: Sequence[int] = (1, 3, 5, 7, 9),
     voting_strategies: Sequence[str] = ("majority", "inverse_distance"),
     retention_policies: Sequence[str] = ("nr", "ar", "dc", "og"),
+    reduction_method: str | None = None,
+    reduction_distance: str | None = None,
     data_root: str | Path = "data",
     output_dir: str | Path = "results",
     progress_callback: Any = None,
@@ -219,7 +282,12 @@ def run_experiment_matrix(
             for dist in distances:
                 # Prepare fold data once per (ds, fold, dist) to optimize speed
                 X_tr, y_tr, X_te, y_te, metric = prepare_fold_data(
-                    ds, fold, dist, data_root=data_root
+                    ds,
+                    fold,
+                    dist,
+                    data_root=data_root,
+                    reduction_method=reduction_method,
+                    reduction_distance=reduction_distance,
                 )
 
                 for k, vote, ret in itertools.product(
@@ -245,6 +313,8 @@ def run_experiment_matrix(
                         "k": k,
                         "voting_strategy": vote,
                         "retention_policy": ret,
+                        "reduction_method": reduction_method or "none",
+                        "reduction_distance": reduction_distance or "none",
                         "accuracy": res["accuracy"],
                         "balanced_accuracy": res.get("balanced_accuracy", res["accuracy"]),
                         "precision_macro": res.get("precision_macro", 0.0),
@@ -263,10 +333,9 @@ def run_experiment_matrix(
                     ds_results.append(row)
                     count += 1
 
-                    if progress_callback and count % 100 == 0:
+                    if progress_callback:
                         progress_callback(count, total_runs)
 
-        # Save per-dataset CSV incrementally
         ds_df = pd.DataFrame(ds_results)
         canonical_ds_name = resolve_dataset_dir(ds, data_root)[1]
         ds_df.to_csv(out_path / f"results_{canonical_ds_name}.csv", index=False)
@@ -283,11 +352,13 @@ def run_svm_experiments(
     C: float = 1.0,
     gamma: str | float = "scale",
     random_state: int = 42,
+    reduction_method: str | None = None,
+    reduction_distance: str | None = None,
     data_root: str | Path = "data",
     output_dir: str | Path = "results",
     progress_callback: Any = None,
 ) -> pd.DataFrame:
-    """Run SVM experiments over specified datasets, folds, and kernels."""
+    """Run SVM experiments over specified datasets, folds, kernels, and hyper-parameters."""
     out_path = Path(output_dir)
     out_path.mkdir(parents=True, exist_ok=True)
 
@@ -299,7 +370,11 @@ def run_svm_experiments(
         ds_results: list[dict[str, Any]] = []
         for fold in folds:
             X_tr, y_tr, X_te, y_te = prepare_eager_fold_data(
-                ds, fold, data_root=data_root
+                ds,
+                fold,
+                data_root=data_root,
+                reduction_method=reduction_method,
+                reduction_distance=reduction_distance,
             )
 
             for kernel in kernels:
@@ -321,6 +396,8 @@ def run_svm_experiments(
                     "kernel": kernel,
                     "C": C,
                     "gamma": str(gamma),
+                    "reduction_method": reduction_method or "none",
+                    "reduction_distance": reduction_distance or "none",
                     "n_estimators": None,
                     "criterion": None,
                     "max_depth": None,
@@ -363,6 +440,8 @@ def run_rf_experiments(
     max_depth: int | None = None,
     random_state: int = 42,
     n_jobs: int = -1,
+    reduction_method: str | None = None,
+    reduction_distance: str | None = None,
     data_root: str | Path = "data",
     output_dir: str | Path = "results",
     progress_callback: Any = None,
@@ -379,7 +458,11 @@ def run_rf_experiments(
         ds_results: list[dict[str, Any]] = []
         for fold in folds:
             X_tr, y_tr, X_te, y_te = prepare_eager_fold_data(
-                ds, fold, data_root=data_root
+                ds,
+                fold,
+                data_root=data_root,
+                reduction_method=reduction_method,
+                reduction_distance=reduction_distance,
             )
 
             for n_est, crit in itertools.product(n_estimators_list, criteria_list):
@@ -402,6 +485,8 @@ def run_rf_experiments(
                     "kernel": None,
                     "C": None,
                     "gamma": None,
+                    "reduction_method": reduction_method or "none",
+                    "reduction_distance": reduction_distance or "none",
                     "n_estimators": n_est,
                     "criterion": crit,
                     "max_depth": max_depth,

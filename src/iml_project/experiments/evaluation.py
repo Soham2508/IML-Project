@@ -15,13 +15,17 @@ from iml_project.utils.arff_reader import resolve_dataset_dir
 
 def aggregate_experiment_results(results_df: pd.DataFrame) -> pd.DataFrame:
     """Aggregate per-fold results across the 10 predefined folds for KNN."""
-    group_cols = [
-        "dataset",
+    group_cols = ["dataset"]
+    if "reduction_method" in results_df.columns:
+        group_cols.append("reduction_method")
+    if "reduction_distance" in results_df.columns:
+        group_cols.append("reduction_distance")
+    group_cols.extend([
         "distance_metric",
         "k",
         "voting_strategy",
         "retention_policy",
-    ]
+    ])
 
     agg_dict: dict[str, Any] = {
         "mean_accuracy": ("accuracy", "mean"),
@@ -317,10 +321,16 @@ def export_evaluation_report(
 
 def aggregate_eager_results(results_df: pd.DataFrame, model_type: str) -> pd.DataFrame:
     """Aggregate per-fold results across the 10 predefined folds for SVM or Random Forest."""
+    extra_cols = []
+    if "reduction_method" in results_df.columns:
+        extra_cols.append("reduction_method")
+    if "reduction_distance" in results_df.columns:
+        extra_cols.append("reduction_distance")
+
     if model_type == "svm":
-        group_cols = ["dataset", "model", "kernel", "C", "gamma"]
+        group_cols = ["dataset"] + extra_cols + ["model", "kernel", "C", "gamma"]
     elif model_type == "rf":
-        group_cols = ["dataset", "model", "n_estimators", "criterion", "max_depth"]
+        group_cols = ["dataset"] + extra_cols + ["model", "n_estimators", "criterion", "max_depth"]
     else:
         raise ValueError(f"Unknown model_type '{model_type}', expected 'svm' or 'rf'")
 

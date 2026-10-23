@@ -406,3 +406,269 @@ class RNG2(InstanceReducer):
 
 
 RNGE = RNG2
+RNGE2 = RNG2
+
+
+class DROP3(InstanceReducer):
+    """Decremental Reduction Optimization Procedure 3 (DROP3).
+
+    DROP3 is an instance reduction method consisting of two phases:
+      1. Phase I (Noise filtering): Remove instances misclassified by their
+         k-nearest neighbours in S using an ENN-style leave-one-out rule.
+      2. Phase II (Ordered reduction): Sort surviving instances in descending
+         order of distance to their nearest enemy, then remove each candidate
+         if doing so does not decrease the number of its associates in T
+         that are classified correctly.
+
+    Reference
+    ---------
+    D. R. Wilson and T. R. Martinez, "Reduction Techniques for Instance-Based
+    Learning Algorithms," Machine Learning, vol. 38, no. 3, pp. 257-286, 2000.
+    """
+
+    def __init__(
+        self,
+        k: int = 3,
+        distance_metric: DistanceMetric | str | None = None,
+    ) -> None:
+        if k < 1:
+            raise ValueError(f"k must be at least 1, got {k}.")
+        if distance_metric is None:
+            distance_metric = EuclideanDistance()
+        elif isinstance(distance_metric, str):
+            distance_metric = get_distance_metric(distance_metric)
+        super().__init__(distance_metric=distance_metric)
+        self.k = k
+        self.selected_indices_: list[int] = []
+        self.removed_indices_: list[int] = []
+
+    def fit_resample(self, X: Any, y: Any) -> tuple[Any, Any]:
+        """
+        Reduce the training instances using DROP3.
+
+        Parameters
+        ----------
+        X : array-like or pd.DataFrame of shape (n_samples, n_features)
+            Training feature vectors.
+        y : array-like or pd.Series of shape (n_samples,)
+            Categorical target labels.
+
+        Returns
+        -------
+        X_reduced : array-like or pd.DataFrame
+            Reduced feature vectors.
+        y_reduced : array-like, pd.Series, or list
+            Reduced target labels.
+        """
+        if len(X) != len(y):
+            raise ValueError(
+                f"X and y must have the same length. Got len(X)={len(X)}, len(y)={len(y)}."
+            )
+
+        n_samples = len(X)
+        if n_samples == 0:
+            self.selected_indices_ = []
+            self.removed_indices_ = []
+            if hasattr(X, "iloc"):
+                return X.iloc[[]], y.iloc[[]]
+            if isinstance(y, list):
+                return (
+                    np.empty((0, 0) if not hasattr(X, "shape") else (0, X.shape[1])),
+                    [],
+                )
+            return (
+                np.empty((0, 0) if not hasattr(X, "shape") else (0, X.shape[1])),
+                np.empty(0, dtype=getattr(y, "dtype", object)),
+            )
+
+        if n_samples == 1:
+            self.selected_indices_ = [0]
+            self.removed_indices_ = []
+            return X, y
+
+        # Convert to numpy arrays for internal calculations
+        if isinstance(X, np.ndarray):
+            X_arr = X
+        elif hasattr(X, "to_numpy"):
+            X_arr = X.to_numpy()
+        else:
+            X_arr = np.asarray(X)
+
+        if isinstance(y, (np.ndarray, list)):
+            y_arr = np.asarray(y)
+        elif hasattr(y, "to_numpy"):
+            y_arr = y.to_numpy()
+        else:
+            y_arr = np.asarray(y)
+
+        # Fit IVDM metric if applicable and not already fitted
+        if isinstance(self.distance_metric, IVDMDistance) and not getattr(
+            self.distance_metric, "is_fitted", False
+        ):
+            self.distance_metric.fit(X_arr, y_arr)
+
+        # Precompute pairwise distance matrix D_mat
+        D_mat = np.zeros((n_samples, n_samples), dtype=np.float64)
+        for i in range(n_samples):
+            D_mat[i] = self.distance_metric.compute_all(X_arr[i], X_arr)
+
+        def _majority_vote(
+            neighbor_indices: list[int],
+            D_row: np.ndarray,
+        ) -> Any:
+            if not neighbor_indices:
+                return None
+            labels = [y_arr[i] for i in neighbor_indices]
+            counts = Counter(labels)
+            max_count = max(counts.values())
+            tied = [c for c, cnt in counts.items() if cnt == max_count]
+            if len(tied) == 1:
+                return tied[0]
+            # Tie-break: closest neighbor among tied classes, then string sort
+            min_dist_by_class: dict[Any, float] = {}
+            for i in neighbor_indices:
+                c = y_arr[i]
+                if c in tied:
+                    d = D_row[i]
+                    if c not in min_dist_by_class or d < min_dist_by_class[c]:
+                        min_dist_by_class[c] = float(d)
+            return min(
+                tied, key=lambda c: (min_dist_by_class.get(c, float("inf")), str(c))
+            )
+
+        # Step 1: Initialize S <- copy(T)
+        S_set: set[int] = set(range(n_samples))
+
+        # Phase I: ENN-style noise filtering
+        # Sequential filtering over a snapshot of initial instances
+        snapshot = list(range(n_samples))
+        for P in snapshot:
+            if P in S_set:
+                eligible = [s for s in S_set if s != P]
+                if not eligible:
+                    continue
+                k_eff = min(self.k, len(eligible))
+                # k nearest instances to P in S \ {P}
+                sorted_eligible = sorted(eligible, key=lambda s: (D_mat[P, s], s))
+                neighbors_P = sorted_eligible[:k_eff]
+                pred_P = _majority_vote(neighbors_P, D_mat[P])
+                if pred_P != y_arr[P] and len(S_set) > 1:
+                    S_set.remove(P)
+
+        # Phase II: DROP2-style ordered reduction
+        S_1 = list(S_set)
+        if not S_1:
+            S_1 = list(range(n_samples))
+            S_set = set(S_1)
+
+        # Compute nearest enemy distance for each P in S_1
+        enemy_distance: dict[int, float] = {}
+        for P in S_1:
+            enemies = [Q for Q in S_1 if y_arr[Q] != y_arr[P]]
+            if enemies:
+                enemy_distance[P] = min(D_mat[P, Q] for Q in enemies)
+            else:
+                # Undefined enemy distance (e.g. single class remaining)
+                enemy_distance[P] = float("inf")
+
+        # Order instances in S_1 by enemy_distance in descending order
+        # Tie-break by instance index P
+        ORDER = sorted(S_1, key=lambda P: (-enemy_distance[P], P))
+
+        # Maintain sorted nearest eligible neighbours in S for each instance A in T
+        # For A in T, eligible neighbours in S are S \ {A}
+        neighbors: dict[int, list[int]] = {}
+        for A in range(n_samples):
+            neighbors[A] = sorted(
+                [s for s in S_set if s != A], key=lambda s: (D_mat[A, s], s)
+            )
+
+        for P in ORDER:
+            if P not in S_set:
+                continue
+
+            if len(S_set) <= 1:
+                break
+
+            # ASSOC: current associates of P among instances in T
+            # (instances in T whose current first k neighbours in S include P)
+            assoc: list[int] = []
+            for A in range(n_samples):
+                k_curr = min(self.k, len(neighbors[A]))
+                if P in neighbors[A][:k_curr]:
+                    assoc.append(A)
+
+            with_count = 0
+            without_count = 0
+
+            for A in assoc:
+                # With P present
+                k_curr = min(self.k, len(neighbors[A]))
+                nbrs_with = neighbors[A][:k_curr]
+                pred_with = _majority_vote(nbrs_with, D_mat[A])
+                if pred_with == y_arr[A]:
+                    with_count += 1
+
+                # Without P present (promoting next available neighbour)
+                nbrs_without_full = [s for s in neighbors[A] if s != P]
+                k_without = min(self.k, len(nbrs_without_full))
+                nbrs_without = nbrs_without_full[:k_without]
+                pred_without = _majority_vote(nbrs_without, D_mat[A])
+                if pred_without == y_arr[A]:
+                    without_count += 1
+
+            if without_count >= with_count:
+                # Remove P from S
+                S_set.remove(P)
+                # Update neighbour lists for all instances in T
+                for A in range(n_samples):
+                    if P in neighbors[A]:
+                        neighbors[A].remove(P)
+
+        selected_indices = sorted(S_set)
+        removed_indices = [i for i in range(n_samples) if i not in S_set]
+        self.selected_indices_ = selected_indices
+        self.removed_indices_ = removed_indices
+
+        # Return reduced feature set and labels matching original input types
+        if hasattr(X, "iloc"):
+            X_reduced = X.iloc[selected_indices]
+        else:
+            X_reduced = X_arr[selected_indices]
+
+        if hasattr(y, "iloc"):
+            y_reduced = y.iloc[selected_indices]
+        elif isinstance(y, list):
+            y_reduced = [y[i] for i in selected_indices]
+        else:
+            y_reduced = y_arr[selected_indices]
+
+        return X_reduced, y_reduced
+
+
+def get_instance_reducer(
+    name: str,
+    distance_metric: DistanceMetric | str | None = None,
+    **kwargs: Any,
+) -> InstanceReducer:
+    """Factory function returning an instance of the requested instance reduction algorithm.
+
+    Supported methods:
+      - 'fcnn3', 'fcnn' -> FCNN3
+      - 'rng2', 'rnge2', 'rnge' -> RNG2
+      - 'drop3', 'drop' -> DROP3
+    """
+    normalized = name.strip().lower().replace("-", "").replace("_", "")
+    if normalized in {"fcnn3", "fcnn"}:
+        return FCNN3(distance_metric=distance_metric)
+    elif normalized in {"rng2", "rnge2", "rnge"}:
+        return RNG2(distance_metric=distance_metric)
+    elif normalized in {"drop3", "drop"}:
+        k = kwargs.get("k", 3)
+        return DROP3(k=k, distance_metric=distance_metric)
+    else:
+        raise ValueError(
+            f"Unknown instance reduction method '{name}'. Supported methods: 'fcnn3', 'rng2', 'drop3'."
+        )
+
+

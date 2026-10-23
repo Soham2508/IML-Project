@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+from .instance_reduction import (
+    DROP3,
+    FCNN3,
+    RNG2,
+    RNGE2,
+    InstanceReducer,
+    get_instance_reducer,
+)
 from .knn import KNNClassifier, kNNAlgorithm
 from .random_forest import rfAlgorithm
 from .retention import (
@@ -20,9 +28,14 @@ from .voting import (
 )
 
 __all__ = [
+    "DROP3",
+    "FCNN3",
+    "RNG2",
+    "RNGE2",
     "AlwaysRetain",
     "CaseBase",
     "DifferentClass",
+    "InstanceReducer",
     "InverseDistanceWeightedVoting",
     "KNNClassifier",
     "MajorityVoting",
@@ -30,6 +43,7 @@ __all__ = [
     "OblivionByGoodness",
     "RetentionPolicy",
     "VotingStrategy",
+    "get_instance_reducer",
     "get_retention_policy",
     "get_voting_strategy",
     "kNNAlgorithm",

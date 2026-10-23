@@ -5,7 +5,13 @@ import unittest
 import numpy as np
 import pandas as pd
 
-from iml_project.core.instance_reduction import FCNN3, RNG2, RNGE2, InstanceReducer
+from iml_project.core.instance_reduction import (
+    DROP3,
+    FCNN3,
+    RNG2,
+    RNGE2,
+    InstanceReducer,
+)
 from iml_project.core.knn import KNNClassifier
 from iml_project.utils.distance_metrics import EuclideanDistance, ManhattanDistance
 
@@ -166,7 +172,7 @@ class TestRNG2(unittest.TestCase):
         y = y1 + y2
 
         rng = RNG2()
-        X_red, y_red = rng.fit_resample(X, y)
+        X_red, _ = rng.fit_resample(X, y)
         self.assertEqual(len(X_red), len(X))
         self.assertEqual(len(rng.removed_indices_), 0)
 
@@ -195,7 +201,7 @@ class TestRNG2(unittest.TestCase):
         noise_idx = len(X_A)  # index 8
 
         rng = RNG2()
-        X_red, y_red = rng.fit_resample(X, y)
+        X_red, _ = rng.fit_resample(X, y)
 
         self.assertIn(noise_idx, rng.removed_indices_)
         self.assertNotIn(noise_idx, rng.selected_indices_)
@@ -218,6 +224,91 @@ class TestRNG2(unittest.TestCase):
         self.assertIsInstance(df_red, pd.DataFrame)
         self.assertIsInstance(s_red, pd.Series)
         self.assertEqual(len(df_red), len(df_X))
+
+
+class TestDROP3(unittest.TestCase):
+    """Unit tests specific to the DROP3 instance reduction algorithm."""
+
+    def test_subclass_and_defaults(self) -> None:
+        """Verify DROP3 inherits from InstanceReducer and sets defaults."""
+        drop = DROP3()
+        self.assertIsInstance(drop, InstanceReducer)
+        self.assertEqual(drop.k, 3)
+        self.assertIsInstance(drop.distance_metric, EuclideanDistance)
+
+    def test_invalid_k(self) -> None:
+        """Verify that k < 1 raises ValueError."""
+        with self.assertRaises(ValueError):
+            DROP3(k=0)
+
+    def test_empty_and_single_sample_inputs(self) -> None:
+        """Verify behavior on empty and single-sample datasets."""
+        drop = DROP3()
+
+        # Empty
+        X_empty = np.empty((0, 2))
+        y_empty = np.array([])
+        X_red, y_red = drop.fit_resample(X_empty, y_empty)
+        self.assertEqual(len(X_red), 0)
+        self.assertEqual(len(y_red), 0)
+
+        # Single sample
+        X_single = np.array([[1.0, 2.0]])
+        y_single = np.array(["A"])
+        X_red, y_red = drop.fit_resample(X_single, y_single)
+        self.assertEqual(len(X_red), 1)
+        self.assertEqual(len(y_red), 1)
+        self.assertEqual(drop.selected_indices_, [0])
+        self.assertEqual(drop.removed_indices_, [])
+
+    def test_phase1_noise_filtering(self) -> None:
+        """Verify that an isolated opposing-class noise point is removed by Phase 1."""
+        # Dense cluster of Class A
+        np.random.seed(42)
+        X_A = np.random.randn(20, 2) * 0.5 + np.array([0.0, 0.0])
+        y_A = ["A"] * 20
+
+        # One noise point of Class B placed right in the center of Class A
+        X_noise = np.array([[0.0, 0.0]])
+        y_noise = ["B"]
+
+        # Dense cluster of Class B
+        X_B = np.random.randn(20, 2) * 0.5 + np.array([10.0, 10.0])
+        y_B = ["B"] * 20
+
+        X = np.vstack([X_A, X_noise, X_B])
+        y = y_A + y_noise + y_B
+        noise_idx = 20  # index of X_noise
+
+        drop = DROP3(k=3)
+        drop.fit_resample(X, y)
+
+        self.assertIn(noise_idx, drop.removed_indices_)
+        self.assertNotIn(noise_idx, drop.selected_indices_)
+
+    def test_reduction_and_pandas_support(self) -> None:
+        """Verify DROP3 reduces redundant points and preserves Pandas types."""
+        np.random.seed(42)
+        X1 = np.random.randn(25, 3) + np.array([0, 0, 0])
+        y1 = ["C1"] * 25
+        X2 = np.random.randn(25, 3) + np.array([6, 6, 6])
+        y2 = ["C2"] * 25
+
+        X = np.vstack([X1, X2])
+        y = y1 + y2
+
+        df_X = pd.DataFrame(X, columns=["f1", "f2", "f3"])
+        s_y = pd.Series(y, name="target")
+
+        drop = DROP3(k=3, distance_metric=ManhattanDistance())
+        df_red, s_red = drop.fit_resample(df_X, s_y)
+
+        self.assertIsInstance(df_red, pd.DataFrame)
+        self.assertIsInstance(s_red, pd.Series)
+        self.assertEqual(len(df_red), len(s_red))
+        # Redundant interior points should have been pruned
+        self.assertLess(len(df_red), len(df_X))
+        self.assertGreater(len(df_red), 0)
 
 
 if __name__ == "__main__":
