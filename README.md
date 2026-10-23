@@ -56,33 +56,53 @@ IML-Project/
 
 1. Create and activate a Python 3.11 virtual environment:
 
+   Windows
    ```powershell
    python -m venv .venv
    .\.venv\Scripts\Activate.ps1
    ```
-2. Install dependencies:
+   MacOS
+   ```zsh
+   python -m venv .venv
+   source .venv/bin/activate
+   ```
 
+2. Install dependencies:
+   
+   Windows
    ```powershell
    pip install -r requirements.txt
    ```
-
+   MacOS
+   ```zsh
+   pip install -r requirements.txt
+   ```
 ---
 
 ## Running the Unit Tests
 
 Execute the complete test suite (33 unit tests across 5 test modules):
 
+Windows
 ```powershell
 $env:PYTHONPATH="src"
 python -m unittest discover tests
 ```
+MacOS
+   ```zsh
+   PYTHONPATH=src python -m unittest discover tests
+   ```
 
 To run code quality and linting checks:
 
+Windows
 ```powershell
 ruff check src tests main.py
 ```
-
+MacOS
+   ```zsh
+   ruff check src tests main.py
+   ```
 ---
 
 ## Running Experiments via CLI
@@ -93,11 +113,15 @@ ruff check src tests main.py
 
 Run the full parameter grid or custom subsets on `heart-statlog`, `grid`, or `all`:
 
+Windows
 ```powershell
 $env:PYTHONPATH="src"
 python main.py --model knn --dataset heart-statlog --k 1 3 5 7 9
 ```
-
+MacOS
+```zsh
+PYTHONPATH=src python main.py --model knn --dataset heart-statlog --k 1 3 5 7 9
+```
 *Customizing KNN options:*
 
 - `--distances`: Distance metrics (`euclidean`, `manhattan`, `canberra`, `clark`, `heom`, `ivdm`)
@@ -109,9 +133,14 @@ python main.py --model knn --dataset heart-statlog --k 1 3 5 7 9
 
 Run SVM cross-validation across kernels with automatic comparison against prior KNN baseline:
 
+Windows
 ```powershell
 $env:PYTHONPATH="src"
 python main.py --model svm --dataset heart-statlog --knn-baseline-dir results/experiment_results_1
+```
+MacOS
+```zsh
+PYTHONPATH=src python main.py --model svm --dataset heart-statlog --knn-baseline-dir results/experiment_results_1
 ```
 
 *Customizing SVM options:*
@@ -124,11 +153,15 @@ python main.py --model svm --dataset heart-statlog --knn-baseline-dir results/ex
 
 Run Random Forest cross-validation across tree counts and impurity criteria:
 
+Windows
 ```powershell
 $env:PYTHONPATH="src"
 python main.py --model rf --dataset heart-statlog --knn-baseline-dir results/experiment_results_1
 ```
-
+MacOS
+```zsh
+PYTHONPATH=src python main.py --model rf --dataset heart-statlog --knn-baseline-dir results/experiment_results_1
+```
 *Customizing Random Forest options:*
 
 - `--rf-n-estimators`: Tree counts (default: `100 200`)
