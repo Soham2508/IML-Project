@@ -1,273 +1,361 @@
-# IML Work 2: Classification Framework (Lazy, Eager Learning & Instance Reduction)
+# IML Practice: Classification Framework (Lazy, Eager Learning & Instance Reduction)
 
-## Overview
+## Team
 
-This repository implements a modular, reproducible classification, instance reduction, and empirical evaluation framework for **IML Work 2 (Course 2026–2027)**.
-The framework provides:
+- Soham Chakraborty
+- Luis David Landicho Antonio
+- Bhavan Mullur Gopal
+- Vinay Narayanappa
 
-1. **Lazy Learning (KNN from scratch):** Comparative evaluation of distance/similarity metrics (`euclidean`, `manhattan`, `canberra`, `clark`, `heom`, `ivdm`), voting strategies (`majority`, `inverse_distance`), and dynamic case-base retention policies (`nr`, `ar`, `dc`, `og`).
-2. **Instance Reduction Techniques (Preprocessing Stage):** Three distinct instance reduction algorithms to condense or edit training sets before model training:
-   - **`FCNN3` (Fast Condensed Nearest Neighbor 3):** A 1-NN consistent condensation algorithm that initializes with the centroid representative of the most populated class and iteratively incorporates the closest Voronoi enemy of the cell with the highest enemy count.
-   - **`RNG2` / `RNGE-2` (Relative Neighbourhood Graph 2nd-Order Editing):** A graph-based editing technique that builds a Relative Neighbourhood Graph (RNG) and prunes instances misclassified by their immediate RNG neighbors whose expanded same-class graph neighborhood is strictly dominated by opposing classes.
-   - **`DROP3` (Decremental Reduction Optimization Procedure 3):** A hybrid two-phase decremental reduction algorithm combining an initial ENN leave-one-out noise filter with an ordered associate-based deletion pass sorted by distance to the nearest enemy.
-3. **Eager Learning (SVM & Random Forest):** Integrates scikit-learn's Support Vector Machines (`SVC`) and Random Forests (`RandomForestClassifier`) directly into the predefined 10-fold cross-validation pipeline.
-4. **Comparative Evaluation & Statistical Testing:** Reports identical classification and efficiency metrics across all model families and performs paired two-tailed Student's $t$-tests ($df = 9$) across configurations and against prior KNN baseline runs (`--knn-baseline-dir`).
-5. **Zero Data Leakage:** All data preprocessing (feature-type inference, normalization bounds $[0, 1]$, imputation medians/modes, one-hot encoding, IVDM conditional probabilities, and instance reduction) is strictly fitted on each training fold.
+## Environment
 
----
-
-## Repository Structure
-
-```
-IML-Project/
-├── data/
-│   ├── grid/                       # TAO-Grid 10-fold CV ARFF files
-│   └── heart-statlog/              # Heart-Statlog 10-fold CV ARFF files
-├── results/                        # Auto-versioned results directories (experiment_results_{N})
-│   └── experiment_results_1/       # Prior baseline KNN results
-├── src/
-│   └── iml_project/
-│       ├── core/
-│       │   ├── instance_reduction.py # InstanceReducer base, FCNN3, RNG2/RNGE2, DROP3, get_instance_reducer
-│       │   ├── knn.py              # KNNClassifier & kNNAlgorithm from scratch
-│       │   ├── svm.py              # svmAlgorithm wrapper using SVC
-│       │   ├── random_forest.py    # rfAlgorithm wrapper using RandomForestClassifier
-│       │   ├── voting.py           # Majority and Inverse Distance Weighted voting
-│       │   └── retention.py        # CaseBase, NR, AR, DC, and OG retention policies
-│       ├── experiments/
-│       │   ├── runner.py           # Experiment grids for KNN, SVM, and RF with instance reduction
-│       │   └── evaluation.py       # Aggregation, statistical tests & baseline comparison
-│       └── utils/
-│           ├── arff_reader.py      # ARFF table loading and fold alignment
-│           ├── distance_metrics.py # Euclidean, Manhattan, Canberra, Clark, HEOM, IVDM
-│           ├── folds.py            # Fold discovery and validation
-│           └── preprocessing.py    # Preprocessor, feature inference, normalization, and reduction hooks
-├── tests/
-│   ├── test_instance_reduction.py  # Comprehensive tests for FCNN3, RNG2, and DROP3
-│   ├── test_preprocessing.py       # Preprocessing and normalization tests
-│   ├── test_data_pipeline.py       # Fold alignment, feature inference, leakage tests
-│   ├── test_core_algorithms.py     # Hand-calculated metric tests, voting, retention
-│   ├── test_experiments.py         # KNN experiment matrix and directory tests
-│   └── test_eager_models.py        # SVM/RF algorithms, eager runner, CLI validation
-├── main.py                         # Unified CLI entry point
-├── CLASS_DESIGN.md                 # Condensed class & method reference
-├── DATAFLOW.md                     # Architecture diagram and end-to-end dataflow
-├── requirements.txt                # Dependencies
-└── README.md
-```
+- **Python Version:** `3.11.9` (compatible with Python 3.11+)
+- **Tested Operating Systems:**
+  - Windows 11 (tested in PowerShell and Command Prompt)
+  - Linux (tested in Bash / Zsh)
+  - macOS (tested in Zsh)
+- **Hardware Requirements:** Standard multi-core CPU (e.g., Intel/AMD x86_64 or Apple Silicon ARM64). No GPU or specialized accelerator hardware is required.
+- **Software Requirements:** Python 3.11+ and standard `pip` package manager. All external libraries are documented in `requirements.txt`.
 
 ---
 
-## Setup and Installation
+## Project structure
 
-1. Create and activate a Python 3.11 virtual environment:
+The submission package follows the required organization:
 
-   Windows
-   ```powershell
-   python -m venv .venv
-   .\.venv\Scripts\Activate.ps1
-   ```
-   MacOS
-   ```zsh
-   python -m venv .venv
-   source .venv/bin/activate
-   ```
-   Linux
-   ```shell
-   python -m venv .venv
-   source .venv/bin/activate
-   ```
+```
+submission.zip
+├── report.pdf                      # Practice scientific and technical report (outside code/)
+└── code/                           # Mandatory root directory containing all executable code
+    ├── README.md                   # Operational guide and reproduction manual
+    ├── requirements.txt            # Pinned package dependencies
+    ├── main.py                     # Unified executable command-line entry point
+    ├── data/                       # Predefined 10-fold cross-validation datasets
+    │   ├── grid/                   # TAO-Grid 2D synthetic dataset (10 train/test ARFF pairs)
+    │   └── heart-statlog/          # Heart-Statlog clinical dataset (10 train/test ARFF pairs)
+    ├── results/                    # Auto-created output folder for experiment CSV artifacts
+    │   └── experiment_results_1/   # Sample baseline KNN execution directory
+    ├── src/
+    │   └── iml_project/            # Main project package
+    │       ├── core/               # Learning algorithms, reduction, voting, and retention
+    │       │   ├── instance_reduction.py # InstanceReducer base class, FCNN3, RNG2, DROP3
+    │       │   ├── knn.py          # KNNClassifier and kNNAlgorithm (from scratch)
+    │       │   ├── svm.py          # svmAlgorithm (eager wrapper for scikit-learn SVC)
+    │       │   ├── random_forest.py# rfAlgorithm (eager wrapper for RandomForestClassifier)
+    │       │   ├── voting.py       # MajorityVoting and InverseDistanceWeightedVoting
+    │       │   └── retention.py    # CaseBase container and retention policies (NR, AR, DC, OG)
+    │       ├── experiments/        # Experiment execution, metrics, and statistical analysis
+    │       │   ├── runner.py       # Cross-validation experiment matrices for KNN, SVM, and RF
+    │       │   └── evaluation.py   # Aggregation, metric calculation, and statistical tests
+    │       └── utils/              # Data parsing, feature preprocessing, and metrics
+    │           ├── arff_reader.py  # ARFF file loading and fold pairing
+    │           ├── distance_metrics.py # Vector and nominal distance functions (Euclidean, IVDM, etc.)
+    │           ├── folds.py        # 10-fold CV discovery and structure validation
+    │           └── preprocessing.py# Preprocessor (scaling, imputation, encoding, leakage-free reduction)
+    └── tests/                      # Automated unit test suite (52 tests across 6 modules)
+        ├── test_core_algorithms.py # Hand-calculated metric, voting, and retention tests
+        ├── test_data_pipeline.py   # Fold discovery, validation, and ARFF parsing tests
+        ├── test_eager_models.py    # SVM/RF wrappers and parameter validation tests
+        ├── test_experiments.py     # Experiment grid execution and directory versioning tests
+        ├── test_instance_reduction.py # FCNN3, RNG2/RNGE2, and DROP3 algorithm tests
+        └── test_preprocessing.py   # Feature inference, scaling, and zero-leakage tests
+```
 
-2. Install dependencies:
-   
-   Windows
-   ```powershell
-   pip install -r requirements.txt
-   ```
-   MacOS
-   ```zsh
-   pip install -r requirements.txt
-   ```
-   Linux
-   ```shell
-   pip install -r requirements.txt
-   ```
+### Class Design and Responsibilities
+
+The codebase adheres to modular, object-oriented design principles with clear single-responsibility separation and explicit public interfaces:
+
+1. **`InstanceReducer` (`src/iml_project/core/instance_reduction.py`)**:
+
+   - *Abstract Base Class* for instance selection and editing algorithms.
+   - *Public Interface:* `fit(X, y)` fits the reduction logic strictly on training fold data; `transform(X, y)` returns the filtered instances `(X_reduced, y_reduced)`; `fit_transform(X, y)` combines both.
+   - *Subclasses:*
+     - `FCNN3`: 1-NN consistent condensation initializing with the centroid representative of the majority class and iteratively incorporating the closest Voronoi enemy of the cell with the highest enemy count.
+     - `RNG2` (alias `RNGE2`): Graph-based editing that constructs a Relative Neighbourhood Graph and prunes instances whose graph neighborhood is dominated by opposing classes.
+     - `DROP3`: Decremental reduction algorithm performing an initial ENN noise filtering pass followed by an ordered associate-based pruning loop sorted by distance to nearest enemy.
+   - *Factory:* `get_instance_reducer(method, distance_metric, **kwargs)`.
+2. **`KNNClassifier` & `kNNAlgorithm` (`src/iml_project/core/knn.py`)**:
+
+   - Non-parametric lazy learning classifier implemented from scratch without black-box nearest-neighbor dependencies.
+   - *State Management:* Instantiated with `KNNClassifier(distance_metric, k, voting_strategy, retention_policy)`.
+   - *Execution Lifecycle:* `fit(X, y)` populates an internal `CaseBase`; `predict(X)` evaluates test instances by querying pairwise distances, locating the $k$ nearest stored cases, delegating vote aggregation to the `VotingStrategy`, and conditionally updating the `CaseBase` according to the active `RetentionPolicy`.
+3. **`CaseBase` & `RetentionPolicy` (`src/iml_project/core/retention.py`)**:
+
+   - `CaseBase`: Stateful container storing active prototypes `(X, y)`. Supports dynamic additions (`add`), removals (`remove`), and vectorized distance queries.
+   - `RetentionPolicy` (ABC): Implements incremental learning policies via `update(case_base, query_x, predicted_y, true_y, neighbors)`.
+   - Policies include: `NeverRetain` (`nr`), `AlwaysRetain` (`ar`), `DifferentClassRetain` (`dc`, retains misclassified instances), and `OnlyGreaterRetain` (`og`, retains instances misclassified with high neighbor confidence).
+4. **`VotingStrategy` (`src/iml_project/core/voting.py`)**:
+
+   - *Abstract Base Class* defining `decide(neighbor_classes, neighbor_distances, class_priors)`.
+   - `MajorityVoting`: Unweighted plurality vote with deterministic tie-breaking by class prior probabilities.
+   - `InverseDistanceWeightedVoting`: Distance-weighted vote proportional to $1 / (d + \epsilon)$ to prioritize closer neighbors.
+5. **`svmAlgorithm` & `rfAlgorithm` (`src/iml_project/core/svm.py`, `random_forest.py`)**:
+
+   - Eager learning wrappers integrating `sklearn.svm.SVC` and `sklearn.ensemble.RandomForestClassifier` into the standardized practice pipeline.
+   - Follow standard `fit(X, y)` and `predict(X)` conventions while recording training fit latency, prediction efficiency, and retention ratios.
+6. **`Preprocessor` (`src/iml_project/utils/preprocessing.py`)**:
+
+   - Enforces **zero data leakage**: feature-type inference, numeric min-max bounds $[0, 1]$, median imputation, categorical mode imputation/encoding, and IVDM conditional probability tables are computed strictly on `X_train`. Test folds (`X_test`) are transformed using training statistics only.
+   - Coordinates instance reduction hooks: when enabled, instance reduction algorithms filter training instances *after* scaling and imputation but *before* model training.
+
 ---
 
-## Running the Unit Tests
+## Installation
 
-Execute the complete test suite (49 unit tests across 6 test modules):
+Follow these steps to set up the working environment and install dependencies on a clean machine:
 
-Windows
-```powershell
-$env:PYTHONPATH="src"
-python -m unittest discover tests
-```
-MacOS
-```zsh
-PYTHONPATH=src python -m unittest discover tests
-```
-Linux
-```shell
-PYTHONPATH=src python -m unittest discover tests
+### 1. Open a terminal in the code folder
+
+Navigate to the root `code/` directory (where `main.py` and `requirements.txt` reside):
+
+```bash
+cd <path-to-submission>/code
 ```
 
-To run only the instance reduction tests:
+### 2. Create a virtual environment
 
-```powershell
-$env:PYTHONPATH="src"
+```bash
+python3 -m venv .venv
+```
+
+*(On Windows PowerShell or Command Prompt, use `python -m venv .venv`)*
+
+### 3. Activate the virtual environment
+
+- **macOS / Linux:**
+  ```bash
+  source .venv/bin/activate
+  ```
+- **Windows PowerShell:**
+  ```powershell
+  .venv\Scripts\Activate.ps1
+  ```
+- **Windows Command Prompt (CMD):**
+  ```cmd
+  .venv\Scripts\activate.bat
+  ```
+
+### 4. Install the dependencies listed in requirements.txt
+
+```bash
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+### 5. Run the experiments described in the README while the environment is active.
+
+### 6. Deactivate the environment after the experiments have finished
+
+```bash
+deactivate
+```
+
+---
+
+## Execution order
+
+- **Independent Experiments:** Every standard experiment (e.g., KNN without reduction, KNN with FCNN3/RNG2/DROP3, SVM, or Random Forest) can be executed in **any order**. Output directories and result files are automatically created by the runner if they do not exist.
+- **Statistical Comparison Dependency (`--knn-baseline-dir`):**
+  - If you run an eager learning experiment (SVM or RF) with the `--knn-baseline-dir` flag to calculate paired Student's $t$-tests against the KNN baseline on identical folds, the **KNN baseline experiment must be run first** so that its output directory exists.
+  - *Example order:*
+    1. Run KNN baseline:
+       ```bash
+       python main.py --model knn --dataset all --output-dir results/knn_baseline
+       ```
+    2. Run SVM or Random Forest comparing against the generated baseline:
+       ```bash
+       python main.py --model svm --dataset all --knn-baseline-dir results/knn_baseline
+       ```
+
+---
+
+## Entry points
+
+1. **`main.py` (Primary CLI Entry Point):**
+   - **Path:** `main.py`
+   - **Purpose:** Central executable script that parses command-line arguments, loads predefined cross-validation folds, executes training and inference grids, performs instance reduction, aggregates evaluation metrics, computes statistical tests, and exports structured CSV reports.
+2. **Automated Test Suite Entry Point:**
+   - **Command:** `python -m unittest discover -s tests -t .`
+   - **Purpose:** Executes 52 automated unit tests verifying correctness across instance reduction algorithms, distance metrics, voting strategies, retention policies, eager models, and preprocessing pipelines.
+
+---
+
+## Parameters
+
+All command-line arguments are introduced with explicit flags (no positional parameters are required).
+
+### General and Execution Parameters
+
+| Parameter                    | Type                 | Valid Values                                       | Default     | Purpose / Scope                                                                                                                                              |
+| :--------------------------- | :------------------- | :------------------------------------------------- | :---------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--model`                  | Optional string      | `knn`, `svm`, `rf`, `all`                  | `knn`     | Model family to execute. `all` runs KNN, SVM, and RF sequentially.                                                                                         |
+| `--dataset`                | Optional string      | `heart-statlog`, `grid`, `tao-grid`, `all` | `all`     | Target dataset(s). `all` executes both `heart-statlog` and `grid`.                                                                                     |
+| `--output_dir--output-dir` | Optional string/path | Any valid directory path                           | `results` | Destination folder for CSV reports. Defaults to auto-incrementing directories: `results/experiment_results_{N}`. Output folders are created automatically. |
+| `--knn-baseline-dir`       | Optional string/path | Existing directory path                            | `None`    | Path to prior KNN baseline results. Used by SVM and RF to produce `model_comparison.csv` with paired $t$-tests.                                          |
+| `--random-state`           | Optional integer     | Integer $\ge 0$                                  | `42`      | Global pseudo-random seed ensuring deterministic results across SVM, RF, and tie-breaking.                                                                   |
+
+### Instance Reduction Parameters (Preprocessing Stage)
+
+| Parameter                                  | Type            | Valid Values                                                              | Default       | Purpose / Scope                                                                                                        |
+| :----------------------------------------- | :-------------- | :------------------------------------------------------------------------ | :------------ | :--------------------------------------------------------------------------------------------------------------------- |
+| `--reduction-method--instance-reduction` | Optional string | `fcnn3`, `rng2`, `drop3`                                            | `None`      | Instance reduction algorithm applied to training folds before model fitting. If omitted, full training folds are used. |
+| `--reduction-distance--reduction-metric` | Optional string | `euclidean`, `manhattan`, `canberra`, `clark`, `heom`, `ivdm` | `euclidean` | Distance metric used strictly during instance reduction. Decoupled from classifier distance metrics.                   |
+
+### KNN Specific Parameters (valid only when `--model knn`)
+
+| Parameter       | Type                     | Valid Values                                                              | Default                       | Purpose / Scope                                            |
+| :-------------- | :----------------------- | :------------------------------------------------------------------------ | :---------------------------- | :--------------------------------------------------------- |
+| `--k`         | Optional list of ints    | Positive integers ($k \ge 1$)                                           | `3 5 7 9 11 13 15`          | Neighborhood sizes to evaluate.                            |
+| `--distances` | Optional list of strings | `euclidean`, `manhattan`, `canberra`, `clark`, `heom`, `ivdm` | All 6 metrics                 | Distance functions evaluated for KNN query classification. |
+| `--voting`    | Optional list of strings | `majority`, `inverse_distance`                                        | `majority inverse_distance` | Voting rules for neighbor class aggregation.               |
+| `--retention` | Optional list of strings | `nr`, `ar`, `dc`, `og`                                            | `nr ar dc og`               | Dynamic case-base retention policies.                      |
+
+### SVM Specific Parameters (valid only when `--model svm`)
+
+| Parameter         | Type                     | Valid Values                               | Default        | Purpose / Scope                                               |
+| :---------------- | :----------------------- | :----------------------------------------- | :------------- | :------------------------------------------------------------ |
+| `--svm-kernels` | Optional list of strings | `linear`, `rbf`, `poly`, `sigmoid` | `linear rbf` | Kernel functions evaluated for Support Vector Classification. |
+| `--svm-c`       | Optional float           | Float $C > 0$                            | `1.0`        | Regularization penalty parameter.                             |
+| `--svm-gamma`   | Optional str or float    | `'scale'`, `'auto'`, or float $> 0$  | `'scale'`    | Kernel coefficient for RBF, poly, and sigmoid kernels.        |
+
+### Random Forest Specific Parameters (valid only when `--model rf`)
+
+| Parameter             | Type                     | Valid Values                        | Default          | Purpose / Scope                                                |
+| :-------------------- | :----------------------- | :---------------------------------- | :--------------- | :------------------------------------------------------------- |
+| `--rf-n-estimators` | Optional list of ints    | Integers $> 0$                    | `100 200`      | Number of decision trees in the ensemble.                      |
+| `--rf-criteria`     | Optional list of strings | `gini`, `entropy`, `log_loss` | `gini entropy` | Impurity split criteria.                                       |
+| `--rf-max-depth`    | Optional integer         | Integer $> 0$, or omitted         | `None`         | Maximum tree depth (defaults to full depth).                   |
+| `--n-jobs`          | Optional integer         | Integer (e.g. `-1`)               | `-1`           | Number of parallel worker threads (`-1` uses all CPU cores). |
+
+> [!NOTE]
+> **Parameter Safety & Mutual Exclusivity:** Specifying arguments from an inactive model family (e.g., passing `--k` with `--model svm` or `--svm-kernels` with `--model knn`) triggers an immediate CLI error informing the user of the invalid option.
+
+---
+
+## Running Experiments
+
+Every command below can be copied and executed directly from the root `code/` folder.
+
+### Experiment 1: Baseline Lazy Learning (KNN on Full Training Sets)
+
+- **Entry point:** `main.py`
+- **Command:**
+  ```bash
+  python main.py --model knn --dataset all --k 1 3 5 7 9 --distances euclidean manhattan canberra clark heom ivdm
+  ```
+- **Output:** Executes 10-fold CV across 6 distance metrics, 5 values of $k$, 2 voting schemes, and 4 retention policies on both `heart-statlog` and `grid`. Automatically creates `results/experiment_results_{N}/` containing `all_experiments_results.csv`, `aggregated_results.csv`, `best_configurations.csv`, and `statistical_comparisons.csv`. Prints top-5 leaderboards and Friedman statistical test tables to the console.
+
+### Experiment 2: Lazy Learning with Fast Condensation (KNN + FCNN3)
+
+- **Entry point:** `main.py`
+- **Command:**
+  ```bash
+  python main.py --model knn --dataset heart-statlog --k 1 3 5 --distances euclidean --reduction-method fcnn3 --reduction-distance manhattan
+  ```
+- **Output:** Evaluates FCNN3 condensation on `heart-statlog`. Employs Manhattan distance to build Voronoi enemy graphs during training fold condensation, and evaluates Euclidean 1/3/5-NN on the condensed case base. Saves CSV reports with storage retention ratios and inference latencies.
+
+### Experiment 3: Support Vector Machines (SVM) with Baseline Comparison
+
+- **Entry point:** `main.py`
+- **Command:**
+  ```bash
+  python main.py --model svm --dataset all --svm-kernels linear rbf poly --knn-baseline-dir results/experiment_results_1
+  ```
+- **Output:** Executes 10-fold CV for Linear, RBF, and Polynomial SVMs on both datasets. Computes classification accuracy, macro F1, and training/inference timing. Compares fold-by-fold results against the prior KNN baseline specified in `--knn-baseline-dir` and generates `model_comparison.csv` with paired two-tailed Student's $t$-tests ($df=9$).
+
+### Experiment 4: SVM with Graph-Based Neighborhood Editing (SVM + RNG2)
+
+- **Entry point:** `main.py`
+- **Command:**
+  ```bash
+  python main.py --model svm --dataset heart-statlog --svm-kernels linear rbf --reduction-method rng2 --reduction-distance euclidean
+  ```
+- **Output:** Prunes borderline and noisy training instances using 2nd-order Relative Neighbourhood Graph editing before training SVM classifiers. Records retention ratios and evaluates boundary classification performance.
+
+### Experiment 5: Random Forest with Baseline Comparison
+
+- **Entry point:** `main.py`
+- **Command:**
+  ```bash
+  python main.py --model rf --dataset all --rf-n-estimators 100 200 --rf-criteria gini entropy --knn-baseline-dir results/experiment_results_1
+  ```
+- **Output:** Evaluates Random Forest ensembles across tree counts and impurity criteria. Produces fold-level and aggregated metrics, ranking reports, and statistical comparison against the KNN baseline.
+
+### Experiment 6: Random Forest with Decremental Noise Filtering & Reduction (RF + DROP3)
+
+- **Entry point:** `main.py`
+- **Command:**
+  ```bash
+  python main.py --model rf --dataset heart-statlog --rf-n-estimators 100 --reduction-method drop3 --reduction-distance euclidean
+  ```
+- **Output:** Runs DROP3 two-stage reduction (ENN noise filtering + associate-based decremental pruning) on each training fold prior to fitting Random Forests. Demonstrates the impact of instance reduction on tree depth and training speed.
+
+### Experiment 7: Comprehensive Multi-Model Pipeline (`--model all`)
+
+- **Entry point:** `main.py`
+- **Command:**
+  ```bash
+  python main.py --model all --dataset all
+  ```
+- **Output:** Runs KNN, SVM, and Random Forest across both datasets in a single execution. Exports combined multi-model leaderboards, efficiency comparisons, and omnibus Friedman ranking tests.
+
+---
+
+## Outputs
+
+Each execution automatically writes timestamped and versioned CSV artifacts into `results/experiment_results_{N}/` (or the folder passed via `--output-dir`). Pre-creating the output directory is not required.
+
+### Generated Files and Structure
+
+| Output Artifact                 | Expected Location                   | Description and Contents                                                                                                                                                                                                     |
+| :------------------------------ | :---------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `all_experiments_results.csv` | `results/experiment_results_{N}/` | Raw fold-by-fold results across all 10 folds containing individual accuracy, macro precision, macro recall, macro F1, balanced accuracy, fit time, inference latency, and retention ratio.                                   |
+| `aggregated_results.csv`      | `results/experiment_results_{N}/` | Mean and standard deviation computed across the 10 folds for each metric, grouped by hyperparameter configuration and instance reduction method.                                                                             |
+| `best_configurations.csv`     | `results/experiment_results_{N}/` | Top-performing configurations ranked by accuracy, efficiency (latency in milliseconds), and case-base retention ratio.                                                                                                       |
+| `statistical_comparisons.csv` | `results/experiment_results_{N}/` | Within-family statistical hypothesis tests: paired two-tailed Student's $t$-tests across kernels, metrics, voting, retention, or reduction methods.                                                                        |
+| `model_comparison.csv`        | `results/experiment_results_{N}/` | Paired Student's $t$-test comparing the best eager configuration (SVM or RF) directly against the best KNN baseline configuration on identical cross-validation folds (generated when `--knn-baseline-dir` is provided). |
+
+### Console Output
+
+In addition to exported CSV files, each run prints formatted tables directly to standard output:
+
+- **Configuration Breakdown:** Number of configurations, total evaluations across 10 folds, and active reduction method.
+- **Progress & Timing:** Execution duration per fold and cumulative pipeline runtime in seconds.
+- **Descriptive Leaderboards:** Top 5 configurations ranked by pooled accuracy, inference efficiency (ms/query), and storage retention ratio (%).
+- **Multi-Dataset Hypothesis Testing:** When multiple datasets are evaluated, prints Friedman omnibus test statistics ($\chi_F^2$), Iman-Davenport $F_F$ statistics with $p$-values, average model ranks, and Nemenyi Critical Differences ($\alpha = 0.05$).
+
+---
+
+## Running Unit Tests
+
+The project includes an automated test suite with 52 unit tests verifying data pipeline isolation, distance calculations, eager models, lazy learners, and instance reduction algorithms.
+
+To run all unit tests from the root `code/` folder:
+
+```bash
+python -m unittest discover -s tests -t .
+```
+
+To run a specific test suite (e.g., instance reduction tests):
+
+```bash
 python -m unittest tests/test_instance_reduction.py
 ```
 
-To run code quality and linting checks:
+To verify code quality and style using Ruff:
 
-Windows
-```powershell
+```bash
 ruff check src tests main.py
 ```
-MacOS
-```zsh
+
+To run a specific test suite (e.g., instance reduction tests):
+
+```bash
+python -m unittest tests/test_instance_reduction.py
+```
+
+To verify code quality and style using Ruff:
+
+```bash
 ruff check src tests main.py
 ```
-Linux
-```shell
-ruff check src tests main.py
-```
----
-
-## Running Experiments via CLI
-
-`main.py` requires selecting exactly one model family per invocation via `--model {knn, svm, rf}` (default: `knn`).
-
-### 1. Instance Reduction Options (Preprocessing Stage)
-
-Instance reduction is evaluated during the preprocessing stage strictly on each training fold. If omitted, the full training dataset is preserved untouched.
-
-- `--reduction-method` (or `--instance-reduction`): Choose between `fcnn3`, `rng2`, and `drop3` (default: `None`, ignored if not provided).
-- `--reduction-distance` (or `--reduction-metric`): Distance metric used strictly by the instance reduction algorithm (`euclidean`, `manhattan`, `canberra`, `clark`, `heom`, `ivdm`; default: `euclidean`). This is separate from the distance metric used by the classifier.
-
-### 2. Run Lazy Learning (KNN) with or without Instance Reduction
-
-Run the KNN pipeline across distance metrics, $k$ values, voting strategies, and retention policies:
-
-Windows
-```powershell
-$env:PYTHONPATH="src"
-# Standard KNN on full training data:
-python main.py --model knn --dataset heart-statlog --k 1 3 5 7 9
-
-# KNN trained on instances reduced with FCNN3 (using Manhattan distance for reduction):
-python main.py --model knn --dataset heart-statlog --k 1 3 5 --distances euclidean --reduction-method fcnn3 --reduction-distance manhattan
-```
-MacOS
-```zsh
-PYTHONPATH=src python main.py --model knn --dataset heart-statlog --k 1 3 5 7 9
-```
-Linux
-```shell
-PYTHONPATH=src python main.py --model knn --dataset heart-statlog --k 1 3 5 7 9
-```
-*Customizing KNN options:*
-
-- `--distances`: Distance metrics for KNN inference (`euclidean`, `manhattan`, `canberra`, `clark`, `heom`, `ivdm`)
-- `--k`: Neighbor counts (e.g. `--k 1 3 5 7 9`)
-- `--voting`: Voting policies (`majority`, `inverse_distance`)
-- `--retention`: Retention policies (`nr`, `ar`, `dc`, `og`)
-
-### 3. Run Support Vector Machines (SVM)
-
-Run SVM cross-validation across kernels with optional instance reduction and baseline comparison:
-
-Windows
-```powershell
-$env:PYTHONPATH="src"
-# Standard SVM:
-python main.py --model svm --dataset heart-statlog --knn-baseline-dir results/experiment_results_1
-
-# SVM trained on instances edited with RNG2:
-python main.py --model svm --dataset heart-statlog --svm-kernels linear rbf --reduction-method rng2 --reduction-distance euclidean
-```
-MacOS
-```zsh
-PYTHONPATH=src python main.py --model svm --dataset heart-statlog --knn-baseline-dir results/experiment_results_1
-```
-Linux
-```shell
-PYTHONPATH=src python main.py --model svm --dataset heart-statlog --knn-baseline-dir results/experiment_results_1
-```
-*Customizing SVM options:*
-
-- `--svm-kernels`: List of kernels (`linear`, `rbf`, `poly`, `sigmoid`; default: `linear`, `rbf`)
-- `--svm-c`: Regularization parameter $C > 0$ (default: `1.0`)
-- `--svm-gamma`: Kernel coefficient (`scale`, `auto`, or positive float; default: `scale`)
-
-### 4. Run Random Forest (RF)
-
-Run Random Forest cross-validation across tree counts and impurity criteria with optional instance reduction:
-
-Windows
-```powershell
-$env:PYTHONPATH="src"
-# Standard Random Forest:
-python main.py --model rf --dataset heart-statlog --knn-baseline-dir results/experiment_results_1
-
-# Random Forest trained on instances reduced with DROP3:
-python main.py --model rf --dataset heart-statlog --rf-n-estimators 100 200 --reduction-method drop3 --reduction-distance euclidean
-```
-MacOS
-```zsh
-PYTHONPATH=src python main.py --model rf --dataset heart-statlog --knn-baseline-dir results/experiment_results_1
-```
-Linux
-```shell
-PYTHONPATH=src python main.py --model rf --dataset heart-statlog --knn-baseline-dir results/experiment_results_1
-```
-*Customizing Random Forest options:*
-
-- `--rf-n-estimators`: Tree counts (default: `100 200`)
-- `--rf-criteria`: Split criteria (`gini`, `entropy`; default: `gini`, `entropy`)
-- `--rf-max-depth`: Maximum tree depth (optional, default: `None` for full depth)
-- `--n-jobs`: Parallel worker threads (default: `-1` for all CPU cores)
-
-### 5. Mutual Exclusivity & Safety
-
-Passing options from another model family (e.g. `--k` with `--model svm` or `--svm-kernels` with `--model knn`) immediately produces an informative error:
-
-```
-main.py: error: --k cannot be used when --model svm is selected.
-```
-
----
-
-## Output Files & Directory Versioning
-
-Each execution automatically creates a new sequentially numbered directory under `results/`:
-`results/experiment_results_{N}/` (e.g. `results/experiment_results_1`, `results/experiment_results_2`, ...).
-
-Depending on the model executed, the following CSV artifacts are exported:
-
-| Artifact                                                                  | Description                                                                                                                                                                           |
-| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `all_experiments_results.csv` / `{model}_results.csv`                     | Raw fold-by-fold results containing all classification, reduction, and timing metrics.                                                                                                |
-| `aggregated_results.csv` / `{model}_aggregated_results.csv`               | Mean and standard deviation across all 10 folds for every metric (grouped by configuration and reduction method).                                                                    |
-| `best_configurations.csv` / `{model}_best_configurations.csv`             | Top performing hyper-parameter configurations ranked by accuracy and efficiency.                                                                                                      |
-| `statistical_comparisons.csv` / `{model}_statistical_comparisons.csv`     | Paired Student's $t$-tests across kernels, metrics, voting, retention, or reduction policies.                                                                                         |
-| `model_comparison.csv`                                                    | Paired Student's $t$-test comparing the best eager configuration against the best KNN baseline configuration on matching folds (generated when `--knn-baseline-dir` is provided). |
-
----
-
-## Metrics Reported Across All Models
-
-To ensure strict comparability between lazy and eager learners, all models record:
-
-- **`accuracy`**: Fraction of correct predictions ($\frac{\text{Correct}}{\text{Total}}$).
-- **`balanced_accuracy`**: Macro-average of recall across all classes ($\frac{1}{|C|} \sum_c \text{Recall}_c$), accounting for class imbalance.
-- **`precision_macro`**: Macro-averaged precision score across classes.
-- **`recall_macro`**: Macro-averaged recall score across classes.
-- **`f1_macro`**: Macro-averaged F1 score ($\frac{2 \cdot P \cdot R}{P + R}$).
-- **`fit_time`**: Model fitting latency in seconds (tracked for SVM, RF, and KNN instance base creation).
-- **`mean_prediction_time`**: Average query inference latency in seconds.
-- **`total_prediction_time`**: Cumulative test set prediction latency in seconds.
-- **`retention_ratio`**: Ratio of final instance count to initial count ($\frac{|CB_{final}|}{|CB_{initial}|}$; equals $1.0$ for eager models unless instance reduction is applied).
-- **`reduction_method`**: Instance reduction algorithm used (`fcnn3`, `rng2`, `drop3`, or `none`).
-- **`reduction_distance`**: Distance metric used for instance reduction (`euclidean`, `manhattan`, etc., or `none`).
