@@ -1,0 +1,11 @@
+rank,config_id,average_rank,model,model_family,kernel,C,gamma,reduction_method,reduction_distance,grid_mean_efficiency_ms,grid_rank,heart-statlog_mean_efficiency_ms,heart-statlog_rank,distance_metric,k,voting_strategy,retention_policy,n_estimators,criterion
+1,svm_kernel=linear_C=1.0_gamma=scale,1.0,svm,svm,linear,1.0,scale,none,euclidean,0.011226641880180608,1.0,0.022969629908739415,1.0,,,,,,
+2,knn_metric=manhattan_k=3_vote=majority_ret=nr,4.0,knn,knn,,,,none,euclidean,0.09606096451318728,5.0,0.03841740803586112,3.0,manhattan,3.0,majority,nr,,
+3,knn_metric=manhattan_k=7_vote=majority_ret=nr,5.5,knn,knn,,,,none,euclidean,0.09432812500671066,3.0,0.04027444433800324,8.0,manhattan,7.0,majority,nr,,
+4,knn_metric=manhattan_k=7_vote=majority_ret=dc,5.5,knn,knn,,,,none,euclidean,0.0959768538882214,4.0,0.03999777750491544,7.0,manhattan,7.0,majority,dc,,
+5,knn_metric=manhattan_k=5_vote=majority_ret=nr,6.5,knn,knn,,,,none,euclidean,0.09646679069901129,7.0,0.039554815480692514,6.0,manhattan,5.0,majority,nr,,
+6,knn_metric=manhattan_k=11_vote=majority_ret=nr,7.5,knn,knn,,,,none,euclidean,0.09944322001671427,11.0,0.03897518402448407,4.0,manhattan,11.0,majority,nr,,
+7,knn_metric=euclidean_k=7_vote=majority_ret=nr,8.5,knn,knn,,,,none,euclidean,0.10789253163670379,15.0,0.03836296447035339,2.0,euclidean,7.0,majority,nr,,
+8,knn_metric=manhattan_k=5_vote=majority_ret=dc,9.5,knn,knn,,,,none,euclidean,0.09693034948121117,10.0,0.04036222192182861,9.0,manhattan,5.0,majority,dc,,
+9,knn_metric=manhattan_k=9_vote=majority_ret=nr,10.5,knn,knn,,,,none,euclidean,0.09655736243599923,8.0,0.04146852017449284,13.0,manhattan,9.0,majority,nr,,
+10,knn_metric=manhattan_k=3_vote=majority_ret=dc,12.5,knn,knn,,,,none,euclidean,0.0967274365886963,9.0,0.041900000198640756,16.0,manhattan,3.0,majority,dc,,
