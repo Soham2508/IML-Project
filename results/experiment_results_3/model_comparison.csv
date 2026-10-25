@@ -1,2 +1,0 @@
-dataset,eager_model,eager_best_config,eager_mean_accuracy,knn_best_config,knn_mean_accuracy,mean_diff,std_diff,t_statistic,p_value,significant_005
-heart-statlog,rf,"{'n_estimators': 200, 'criterion': 'gini', 'max_depth': np.float64(nan)}",0.8222222222222222,"{'distance_metric': 'manhattan', 'k': 9, 'voting_strategy': 'inverse_distance', 'retention_policy': 'nr'}",0.8481481481481481,-0.025925925925925953,0.07620394746672082,-1.075862591114977,0.30998232489004784,False

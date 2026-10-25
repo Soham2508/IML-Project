@@ -1,2 +1,0 @@
-comparison,dataset,model,n_pairs,mean_diff,std_diff,t_stat,p_value,sig_005,cfg_a,cfg_b
-Rbf_vs_Linear,heart-statlog,svm,10,-0.029629629629629638,0.04204786757018862,-2.228344058124624,0.05283944651707031,False,kernel=rbf,kernel=linear

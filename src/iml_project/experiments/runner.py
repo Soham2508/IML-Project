@@ -328,7 +328,7 @@ def run_experiment_matrix(
         "heom",
         "ivdm",
     ),
-    k_values: Sequence[int] = (1, 3, 5, 7, 9),
+    k_values: Sequence[int] = (3, 5, 7, 9, 11, 13, 15),
     voting_strategies: Sequence[str] = ("majority", "inverse_distance"),
     retention_policies: Sequence[str] = ("nr", "ar", "dc", "og"),
     reduction_method: str | None = None,

@@ -4,6 +4,7 @@ import argparse
 import sys
 import time
 from pathlib import Path
+from typing import any
 
 # Ensure src/ is on sys.path
 src_dir = Path(__file__).resolve().parent / "src"
@@ -176,13 +177,13 @@ def run_rf_pipeline(
 
 
 def _print_evaluation_summary(
-    eval_dict: dict[str, Any],
+    eval_dict: dict[str, any],
     model_name: str,
     target_datasets: list[str],
     is_reduction: bool,
 ) -> None:
     """Print structured summary of single-dataset descriptive rankings or multi-dataset Friedman test."""
-    print(f"\n========================================================")
+    print("\n========================================================")
     print(f"Statistical Evaluation Summary for {model_name.upper()}")
     print("========================================================")
 

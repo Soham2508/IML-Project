@@ -1,6 +1,0 @@
-comparison,dataset,model,n_pairs,mean_diff,std_diff,t_stat,p_value,sig_005,cfg_a,cfg_b
-"RF(n=100,entropy)_vs_Baseline(n=100,gini)",heart-statlog,rf,10,-0.011111111111111105,0.04635798359387303,-0.757936728959867,0.4678698063949912,False,"n_est=100,crit=entropy","n_est=100,crit=gini"
-"RF(n=200,gini)_vs_Baseline(n=100,gini)",heart-statlog,rf,10,0.0037037037037036978,0.02102393378509429,0.5570860145311555,0.5910512317836047,False,"n_est=200,crit=gini","n_est=100,crit=gini"
-"RF(n=200,entropy)_vs_Baseline(n=100,gini)",heart-statlog,rf,10,0.0,0.039040464940350364,0.0,1.0,False,"n_est=200,crit=entropy","n_est=100,crit=gini"
-Entropy_vs_Gini_(n=100),heart-statlog,rf,10,-0.011111111111111105,0.04635798359387303,-0.757936728959867,0.4678698063949912,False,entropy (n=100),gini (n=100)
-Entropy_vs_Gini_(n=200),heart-statlog,rf,10,-0.0037037037037036978,0.04434144443473573,-0.2641352718976867,0.797624520972103,False,entropy (n=200),gini (n=200)

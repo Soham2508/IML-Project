@@ -1,0 +1,2 @@
+mode,dataset,configurations_evaluated,top_accuracy_config,top_pooled_accuracy,top_efficiency_config,top_mean_efficiency_ms,notes
+single_dataset,heart-statlog,1,svm_kernel=linear_C=1.0_gamma=scale,0.8481481481481481,svm_kernel=linear_C=1.0_gamma=scale,0.011042593029776105,"Single-dataset descriptive mode active. As detailed in the statistical plan, cross-validation folds within a single dataset are not independent datasets and must not be used to compute inferential Friedman p-values."
