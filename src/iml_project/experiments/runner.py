@@ -442,10 +442,6 @@ def run_experiment_matrix(
                     if progress_callback:
                         progress_callback(count, total_runs)
 
-        ds_df = pd.DataFrame(ds_results)
-        canonical_ds_name = resolve_dataset_dir(ds, data_root)[1]
-        ds_df.to_csv(out_path / f"results_{canonical_ds_name}.csv", index=False)
-
     df_all = pd.DataFrame(results)
     df_all.to_csv(out_path / "all_experiments_results.csv", index=False)
     return df_all
@@ -553,12 +549,8 @@ def run_svm_experiments(
                 if progress_callback:
                     progress_callback(count, total_runs)
 
-        ds_df = pd.DataFrame(ds_results)
-        canonical_ds_name = resolve_dataset_dir(ds, data_root)[1]
-        ds_df.to_csv(out_path / f"svm_results_{canonical_ds_name}.csv", index=False)
-
     df_all = pd.DataFrame(results)
-    df_all.to_csv(out_path / "svm_results.csv", index=False)
+    df_all.to_csv(out_path / "all_experiments_results.csv", index=False)
     return df_all
 
 
@@ -666,10 +658,6 @@ def run_rf_experiments(
                 if progress_callback:
                     progress_callback(count, total_runs)
 
-        ds_df = pd.DataFrame(ds_results)
-        canonical_ds_name = resolve_dataset_dir(ds, data_root)[1]
-        ds_df.to_csv(out_path / f"rf_results_{canonical_ds_name}.csv", index=False)
-
     df_all = pd.DataFrame(results)
-    df_all.to_csv(out_path / "rf_results.csv", index=False)
+    df_all.to_csv(out_path / "all_experiments_results.csv", index=False)
     return df_all

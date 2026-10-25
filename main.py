@@ -4,7 +4,7 @@ import argparse
 import sys
 import time
 from pathlib import Path
-from typing import any
+from typing import Any
 
 # Ensure src/ is on sys.path
 src_dir = Path(__file__).resolve().parent / "src"
@@ -177,7 +177,7 @@ def run_rf_pipeline(
 
 
 def _print_evaluation_summary(
-    eval_dict: dict[str, any],
+    eval_dict: dict[str, Any],
     model_name: str,
     target_datasets: list[str],
     is_reduction: bool,
@@ -434,7 +434,7 @@ def main() -> None:
                 parser.error(f"{opt} cannot be used when --model rf is selected.")
 
     # Apply defaults
-    k_values = args.k if args.k is not None else [1, 3, 5, 7, 9]
+    k_values = args.k if args.k is not None else [3, 5, 7, 9, 11, 13, 15]
     distances = (
         args.distances
         if args.distances is not None
@@ -542,7 +542,7 @@ def main() -> None:
             all_dfs.append(df_ds)
 
         combined_df = pd.concat(all_dfs, ignore_index=True)
-        combined_df.to_csv(out_dir / "svm_results.csv", index=False)
+        combined_df.to_csv(out_dir / "all_experiments_results.csv", index=False)
 
         agg_df, best_df, eval_dict, knn_comp = export_eager_evaluation_report(
             combined_df,
@@ -571,7 +571,7 @@ def main() -> None:
             all_dfs.append(df_ds)
 
         combined_df = pd.concat(all_dfs, ignore_index=True)
-        combined_df.to_csv(out_dir / "rf_results.csv", index=False)
+        combined_df.to_csv(out_dir / "all_experiments_results.csv", index=False)
 
         agg_df, best_df, eval_dict, knn_comp = export_eager_evaluation_report(
             combined_df,
@@ -584,10 +584,10 @@ def main() -> None:
             print(f"\nModel Comparison vs KNN Baseline saved ({len(knn_comp)} rows).")
 
     elif args.model == "all":
-        # Run all three model families and execute Stage D comparison
-        knn_dfs, svm_dfs, rf_dfs = [], [], []
+        # Run all three model families and execute unified evaluation
+        all_dfs = []
         for ds in target_datasets:
-            knn_dfs.append(
+            all_dfs.append(
                 run_knn_pipeline(
                     dataset_name=ds,
                     k_values=k_values,
@@ -599,7 +599,7 @@ def main() -> None:
                     output_dir=out_dir,
                 )
             )
-            svm_dfs.append(
+            all_dfs.append(
                 run_svm_pipeline(
                     dataset_name=ds,
                     kernels=svm_kernels,
@@ -611,7 +611,7 @@ def main() -> None:
                     output_dir=out_dir,
                 )
             )
-            rf_dfs.append(
+            all_dfs.append(
                 run_rf_pipeline(
                     dataset_name=ds,
                     n_estimators_list=rf_n_estimators,
@@ -625,27 +625,11 @@ def main() -> None:
                 )
             )
 
-        knn_combined = pd.concat(knn_dfs, ignore_index=True)
-        svm_combined = pd.concat(svm_dfs, ignore_index=True)
-        rf_combined = pd.concat(rf_dfs, ignore_index=True)
+        all_models_combined = pd.concat(all_dfs, ignore_index=True)
+        all_models_combined.to_csv(out_dir / "all_experiments_results.csv", index=False)
 
-        knn_combined.to_csv(out_dir / "all_experiments_results.csv", index=False)
-        svm_combined.to_csv(out_dir / "svm_results.csv", index=False)
-        rf_combined.to_csv(out_dir / "rf_results.csv", index=False)
-
-        export_evaluation_report(knn_combined, output_dir=out_dir)
-        export_eager_evaluation_report(svm_combined, model_type="svm", output_dir=out_dir)
-        export_eager_evaluation_report(rf_combined, model_type="rf", output_dir=out_dir)
-
-        # Stage D: Compare best configuration from each family
-        stage_d_df, stage_d_stats = evaluate_stage_d_comparison(
-            knn_combined, svm_combined, rf_combined, output_dir=out_dir
-        )
-        print("\n========================================================")
-        print("Stage D: Best of Family Comparison (KNN vs SVM vs RF)")
-        print("========================================================")
-        for _, r in stage_d_df.iterrows():
-            print(f"  {r['dataset']} | {r['model_family'].upper():3s} -> Acc: {r['pooled_accuracy']*100:.2f}%, Eff: {r['mean_efficiency_ms']:.3f}ms")
+        agg_df, best_df, eval_dict = export_evaluation_report(all_models_combined, output_dir=out_dir)
+        _print_evaluation_summary(eval_dict, "all", target_datasets, is_red)
 
 
 if __name__ == "__main__":

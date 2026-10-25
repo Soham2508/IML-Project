@@ -499,7 +499,7 @@ def evaluate_single_dataset(
     output_dir: str | Path,
     is_reduction: bool = False,
 ) -> dict[str, pd.DataFrame]:
-    """Single-dataset mode: produce descriptive rankings and leaderboards without inferential fold Friedman."""
+    """Single-dataset mode: produce descriptive rankings and top 10 leaderboards."""
     out_path = Path(output_dir)
     out_path.mkdir(parents=True, exist_ok=True)
 
@@ -509,25 +509,24 @@ def evaluate_single_dataset(
 
     # Sort and export Top 10 by Accuracy
     top10_acc = ds_sub.sort_values(by="rank_accuracy", ascending=True).head(10).reset_index(drop=True)
-    top10_acc.to_csv(out_path / f"top10_accuracy_{dataset_name}.csv", index=False)
+    top10_acc.to_csv(out_path / "top10_accuracy.csv", index=False)
 
     # Sort and export Top 10 by Efficiency
     top10_eff = ds_sub.sort_values(by="rank_efficiency", ascending=True).head(10).reset_index(drop=True)
-    top10_eff.to_csv(out_path / f"top10_efficiency_{dataset_name}.csv", index=False)
+    top10_eff.to_csv(out_path / "top10_efficiency.csv", index=False)
 
     tables: dict[str, pd.DataFrame] = {
         "top10_accuracy": top10_acc,
         "top10_efficiency": top10_eff,
     }
 
-    # If instance reduction is performed, export Top 10 by Retention Ratio
+    # If instance reduction is performed or retention varies, export Top 10 by Retention Ratio
     if is_reduction or ds_sub["retention_ratio"].nunique() > 1:
         top10_ret = ds_sub.sort_values(by="rank_retention", ascending=True).head(10).reset_index(drop=True)
-        top10_ret.to_csv(out_path / f"top10_retention_{dataset_name}.csv", index=False)
+        top10_ret.to_csv(out_path / "top10_retention.csv", index=False)
         tables["top10_retention"] = top10_ret
 
-    # Descriptive summary metadata
-    summary_df = pd.DataFrame([
+    tables["summary"] = pd.DataFrame([
         {
             "mode": "single_dataset",
             "dataset": dataset_name,
@@ -536,15 +535,8 @@ def evaluate_single_dataset(
             "top_pooled_accuracy": float(top10_acc.iloc[0]["pooled_accuracy"]),
             "top_efficiency_config": top10_eff.iloc[0]["config_id"] if "config_id" in top10_eff.columns else "N/A",
             "top_mean_efficiency_ms": float(top10_eff.iloc[0]["mean_efficiency_ms"]),
-            "notes": (
-                "Single-dataset descriptive mode active. As detailed in the statistical plan, "
-                "cross-validation folds within a single dataset are not independent datasets and "
-                "must not be used to compute inferential Friedman p-values."
-            ),
         }
     ])
-    summary_df.to_csv(out_path / f"single_dataset_summary_{dataset_name}.csv", index=False)
-    tables["summary"] = summary_df
 
     return tables
 
@@ -559,108 +551,53 @@ def evaluate_multi_dataset(
     out_path.mkdir(parents=True, exist_ok=True)
 
     results: dict[str, Any] = {}
-    friedman_summary_rows: list[dict[str, Any]] = []
 
     # 1. Friedman Test for Accuracy
     f_acc = compute_friedman_test(agg_df, metric="accuracy")
     results["accuracy_test"] = f_acc
-    top10_acc = f_acc["rankings_df"].head(10)
-    top10_acc.to_csv(out_path / "top10_accuracy_across_datasets.csv", index=False)
+    top10_acc = f_acc["rankings_df"].head(10).reset_index(drop=True)
+    top10_acc.to_csv(out_path / "top10_accuracy.csv", index=False)
     results["top10_accuracy"] = top10_acc
-
-    friedman_summary_rows.append({
-        "metric": "accuracy",
-        "D": f_acc["D"],
-        "M": f_acc["M"],
-        "statistic_chi2_uncorrected": f_acc["statistic_chi2_uncorrected"],
-        "statistic_chi2_corrected": f_acc["statistic_chi2"],
-        "df_chi2": f_acc["df_chi2"],
-        "p_value_chi2": f_acc["p_value_chi2"],
-        "significant_chi2_005": f_acc["significant_chi2_005"],
-        "statistic_f": f_acc["statistic_f"],
-        "df_f1": f_acc["df_f1"],
-        "df_f2": f_acc["df_f2"],
-        "p_value_f": f_acc["p_value_f"],
-        "significant_f_005": f_acc["significant_f_005"],
-        "tie_correction_factor": f_acc["tie_correction_factor"],
-        "cd_nemenyi_005": f_acc["cd_nemenyi_005"],
-        "cd_nemenyi_010": f_acc["cd_nemenyi_010"],
-        "cd_bonferroni_dunn_005": f_acc["cd_bonferroni_dunn_005"],
-        "limitations": f_acc["limitations"],
-    })
 
     # 2. Friedman Test for Efficiency / Solving Time
     f_eff = compute_friedman_test(agg_df, metric="efficiency")
     results["efficiency_test"] = f_eff
-    top10_eff = f_eff["rankings_df"].head(10)
-    top10_eff.to_csv(out_path / "top10_efficiency_across_datasets.csv", index=False)
+    top10_eff = f_eff["rankings_df"].head(10).reset_index(drop=True)
+    top10_eff.to_csv(out_path / "top10_efficiency.csv", index=False)
     results["top10_efficiency"] = top10_eff
 
-    friedman_summary_rows.append({
-        "metric": "efficiency",
-        "D": f_eff["D"],
-        "M": f_eff["M"],
-        "statistic_chi2_uncorrected": f_eff["statistic_chi2_uncorrected"],
-        "statistic_chi2_corrected": f_eff["statistic_chi2"],
-        "df_chi2": f_eff["df_chi2"],
-        "p_value_chi2": f_eff["p_value_chi2"],
-        "significant_chi2_005": f_eff["significant_chi2_005"],
-        "statistic_f": f_eff["statistic_f"],
-        "df_f1": f_eff["df_f1"],
-        "df_f2": f_eff["df_f2"],
-        "p_value_f": f_eff["p_value_f"],
-        "significant_f_005": f_eff["significant_f_005"],
-        "tie_correction_factor": f_eff["tie_correction_factor"],
-        "cd_nemenyi_005": f_eff["cd_nemenyi_005"],
-        "cd_nemenyi_010": f_eff["cd_nemenyi_010"],
-        "cd_bonferroni_dunn_005": f_eff["cd_bonferroni_dunn_005"],
-        "limitations": f_eff["limitations"],
-    })
-
-    # 3. Friedman Test for Retention Ratio (if instance reduction is active)
+    # 3. Friedman Test for Retention Ratio (if instance reduction is active or retention varies)
     if is_reduction or agg_df["retention_ratio"].nunique() > 1:
         try:
             f_ret = compute_friedman_test(agg_df, metric="retention")
             results["retention_test"] = f_ret
-            top10_ret = f_ret["rankings_df"].head(10)
-            top10_ret.to_csv(out_path / "top10_retention_across_datasets.csv", index=False)
+            top10_ret = f_ret["rankings_df"].head(10).reset_index(drop=True)
+            top10_ret.to_csv(out_path / "top10_retention.csv", index=False)
             results["top10_retention"] = top10_ret
-
-            friedman_summary_rows.append({
-                "metric": "retention",
-                "D": f_ret["D"],
-                "M": f_ret["M"],
-                "statistic_chi2_uncorrected": f_ret["statistic_chi2_uncorrected"],
-                "statistic_chi2_corrected": f_ret["statistic_chi2"],
-                "df_chi2": f_ret["df_chi2"],
-                "p_value_chi2": f_ret["p_value_chi2"],
-                "significant_chi2_005": f_ret["significant_chi2_005"],
-                "statistic_f": f_ret["statistic_f"],
-                "df_f1": f_ret["df_f1"],
-                "df_f2": f_ret["df_f2"],
-                "p_value_f": f_ret["p_value_f"],
-                "significant_f_005": f_ret["significant_f_005"],
-                "tie_correction_factor": f_ret["tie_correction_factor"],
-                "cd_nemenyi_005": f_ret["cd_nemenyi_005"],
-                "cd_nemenyi_010": f_ret["cd_nemenyi_010"],
-                "cd_bonferroni_dunn_005": f_ret["cd_bonferroni_dunn_005"],
-                "limitations": f_ret["limitations"],
-            })
         except Exception:
             pass
 
-    # Save Friedman summary table
-    friedman_df = pd.DataFrame(friedman_summary_rows)
-    friedman_df.to_csv(out_path / "friedman_test_results.csv", index=False)
-    results["friedman_summary_df"] = friedman_df
-
-    # Also save dataset-specific top 10 tables for visibility into disagreements
-    for ds in agg_df["dataset"].unique():
-        ds_sub = agg_df[agg_df["dataset"] == ds]
-        ds_top_acc = ds_sub.sort_values(by="rank_accuracy", ascending=True).head(10)
-        ds_top_acc.to_csv(out_path / f"top10_accuracy_{ds}.csv", index=False)
-        ds_top_eff = ds_sub.sort_values(by="rank_efficiency", ascending=True).head(10)
-        ds_top_eff.to_csv(out_path / f"top10_efficiency_{ds}.csv", index=False)
+    summary_rows = [
+        {
+            "metric": "accuracy",
+            "D": f_acc["D"],
+            "M": f_acc["M"],
+            "statistic_chi2": f_acc["statistic_chi2"],
+            "p_value_chi2": f_acc["p_value_chi2"],
+            "statistic_f": f_acc["statistic_f"],
+            "p_value_f": f_acc["p_value_f"],
+        },
+        {
+            "metric": "efficiency",
+            "D": f_eff["D"],
+            "M": f_eff["M"],
+            "statistic_chi2": f_eff["statistic_chi2"],
+            "p_value_chi2": f_eff["p_value_chi2"],
+            "statistic_f": f_eff["statistic_f"],
+            "p_value_f": f_eff["p_value_f"],
+        },
+    ]
+    results["friedman_summary_df"] = pd.DataFrame(summary_rows)
 
     return results
 
@@ -673,15 +610,12 @@ def export_evaluation_report(
     results_df: pd.DataFrame,
     output_dir: str | Path = "results",
 ) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Any]]:
-    """Export aggregated results, best configurations, and statistical tests (single or multi-dataset)."""
+    """Export aggregated results across folds and top 10 rankings (single or multi-dataset)."""
     out_path = Path(output_dir)
     out_path.mkdir(parents=True, exist_ok=True)
 
     agg_df = aggregate_experiment_results(results_df)
     agg_df.to_csv(out_path / "aggregated_results.csv", index=False)
-
-    best_df = find_best_configurations(agg_df, top_n=5)
-    best_df.to_csv(out_path / "best_configurations.csv", index=False)
 
     # Check whether instance reduction is evaluated
     is_reduction = False
@@ -704,13 +638,7 @@ def export_evaluation_report(
             agg_df, output_dir=out_path, is_reduction=is_reduction
         )
 
-    # Legacy compatibility helper: produce statistical_comparisons.csv
-    stat_summary_file = out_path / "statistical_comparisons.csv"
-    if "friedman_summary_df" in eval_dict:
-        eval_dict["friedman_summary_df"].to_csv(stat_summary_file, index=False)
-    elif "summary" in eval_dict:
-        eval_dict["summary"].to_csv(stat_summary_file, index=False)
-
+    best_df = eval_dict.get("top10_accuracy", pd.DataFrame())
     return agg_df, best_df, eval_dict
 
 
@@ -724,34 +652,7 @@ def export_eager_evaluation_report(
     out_path = Path(output_dir)
     out_path.mkdir(parents=True, exist_ok=True)
 
-    agg_df = aggregate_experiment_results(results_df)
-    agg_df.to_csv(out_path / f"{model_type}_aggregated_results.csv", index=False)
-
-    best_df = find_best_eager_configurations(agg_df, top_n=5)
-    best_df.to_csv(out_path / f"{model_type}_best_configurations.csv", index=False)
-
-    is_reduction = False
-    if "reduction_method" in results_df.columns:
-        valid_reds = results_df["reduction_method"].dropna().astype(str).str.lower()
-        is_reduction = bool((valid_reds != "none").any())
-
-    unique_datasets = agg_df["dataset"].unique()
-    eval_dict: dict[str, Any] = {}
-
-    if len(unique_datasets) == 1:
-        eval_dict = evaluate_single_dataset(
-            agg_df, dataset_name=unique_datasets[0], output_dir=out_path, is_reduction=is_reduction
-        )
-    else:
-        eval_dict = evaluate_multi_dataset(
-            agg_df, output_dir=out_path, is_reduction=is_reduction
-        )
-
-    stat_summary_file = out_path / f"{model_type}_statistical_comparisons.csv"
-    if "friedman_summary_df" in eval_dict:
-        eval_dict["friedman_summary_df"].to_csv(stat_summary_file, index=False)
-    elif "summary" in eval_dict:
-        eval_dict["summary"].to_csv(stat_summary_file, index=False)
+    agg_df, best_df, eval_dict = export_evaluation_report(results_df, output_dir=out_path)
 
     knn_comp_df: pd.DataFrame | None = None
     if knn_baseline_dir:

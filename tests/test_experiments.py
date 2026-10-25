@@ -169,10 +169,8 @@ class ExperimentsTests(unittest.TestCase):
             agg_df, best_df, eval_dict = export_evaluation_report(df, output_dir=tmp_dir)
             tmp_path = Path(tmp_dir)
             self.assertTrue((tmp_path / "aggregated_results.csv").exists())
-            self.assertTrue((tmp_path / "best_configurations.csv").exists())
-            self.assertTrue((tmp_path / "top10_accuracy_heart-statlog.csv").exists())
-            self.assertTrue((tmp_path / "top10_efficiency_heart-statlog.csv").exists())
-            self.assertTrue((tmp_path / "single_dataset_summary_heart-statlog.csv").exists())
+            self.assertTrue((tmp_path / "top10_accuracy.csv").exists())
+            self.assertTrue((tmp_path / "top10_efficiency.csv").exists())
             self.assertIn("top10_accuracy", eval_dict)
             self.assertEqual(eval_dict["top10_accuracy"].iloc[0]["config_id"], "cfg_3")
 
