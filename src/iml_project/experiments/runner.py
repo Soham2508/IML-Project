@@ -126,10 +126,10 @@ def prepare_fold_data(
         dataset, fold, data_root
     )
 
-    # HEOM and IVDM need intact nominal columns and normalized numeric columns
+                                                                              
     use_raw_categoricals = distance_metric_name.lower() in {"heom", "ivdm"}
 
-    # Build metric instance for KNN
+                                   
     if use_raw_categoricals:
         num_indices = [
             i for i, t in enumerate(types) if names[i] != target_name and t.lower() not in {"nominal", "categorical"}
@@ -145,7 +145,7 @@ def prepare_fold_data(
     else:
         knn_metric = get_distance_metric(distance_metric_name)
 
-    # Build reduction metric instance if reduction is requested
+                                                               
     red_metric_obj: DistanceMetric | str | None = None
     if reduction_method and str(reduction_method).lower() != "none":
         red_metric_name = reduction_distance or "euclidean"
@@ -177,13 +177,13 @@ def prepare_fold_data(
     X_test = trans_test[pred_cols].to_numpy()
     y_test = trans_test[target_name].tolist()
 
-    # Apply instance reduction at the preprocessing stage
+                                                         
     if reduction_method and str(reduction_method).lower() != "none":
         X_train, y_train = preprocessor.reduce_training_data(X_train, y_train)
         if isinstance(y_train, np.ndarray):
             y_train = y_train.tolist()
 
-    # Re-instantiate KNN metric if columns changed (e.g. after one-hot encoding)
+                                                                                
     if use_raw_categoricals:
         num_indices = [i for i, c in enumerate(pred_cols) if c in preprocessor.numeric_features_]
         nom_indices = [i for i, c in enumerate(pred_cols) if c in preprocessor.categorical_features_]
@@ -232,7 +232,7 @@ def prepare_eager_fold_data(
     X_test = trans_test[pred_cols].to_numpy(dtype=np.float64)
     y_test = trans_test[target_name].tolist()
 
-    # Apply instance reduction at the preprocessing stage
+                                                         
     if reduction_method and str(reduction_method).lower() != "none":
         X_train, y_train = preprocessor.reduce_training_data(X_train, y_train)
         X_train = np.asarray(X_train, dtype=np.float64)
@@ -360,7 +360,7 @@ def run_experiment_matrix(
             train_size_before = len(train_df_raw)
 
             for dist in distances:
-                # Prepare fold data once per (ds, fold, dist) to optimize speed
+                                                                               
                 X_tr, y_tr, X_te, y_te, metric = prepare_fold_data(
                     ds,
                     fold,
@@ -376,7 +376,7 @@ def run_experiment_matrix(
                     voting_obj = get_voting_strategy(vote)
                     retention_obj = get_retention_policy(ret)
 
-                    # Fresh classifier instance to guarantee state reset per run
+                                                                                
                     clf = KNNClassifier(
                         k=k,
                         distance_metric=metric,

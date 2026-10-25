@@ -12,9 +12,9 @@ from scipy import stats
 from iml_project.utils.arff_reader import resolve_dataset_dir
 
 
-# ==============================================================================
-# Fold Aggregation & Descriptive Ranking (Section 3)
-# ==============================================================================
+                                                                                
+                                                    
+                                                                                
 
 def aggregate_experiment_results(results_df: pd.DataFrame) -> pd.DataFrame:
     """Aggregate per-fold results across the predefined folds for each dataset and configuration.
@@ -38,7 +38,7 @@ def aggregate_experiment_results(results_df: pd.DataFrame) -> pd.DataFrame:
 
     df = results_df.copy()
 
-    # Determine grouping columns: dataset + config_id or all hyperparameters
+                                                                            
     potential_meta = [
         "config_id",
         "model",
@@ -79,7 +79,7 @@ def aggregate_experiment_results(results_df: pd.DataFrame) -> pd.DataFrame:
             correct = int(np.round(mean_acc * total_test))
             pooled_acc = mean_acc
 
-        # Efficiency: problem solving time per test instance in milliseconds
+                                                                            
         if "total_prediction_time" in group.columns and total_test > 0:
             mean_eff_ms = float((group["total_prediction_time"].sum() / total_test) * 1000.0)
         elif "mean_prediction_time" in group.columns:
@@ -99,7 +99,7 @@ def aggregate_experiment_results(results_df: pd.DataFrame) -> pd.DataFrame:
             else 0.0
         )
 
-        # Storage / retention ratio: counts aggregation (Section 3.3)
+                                                                     
         train_before_col = (
             "training_size_before_reduction"
             if "training_size_before_reduction" in group.columns
@@ -155,26 +155,26 @@ def aggregate_experiment_results(results_df: pd.DataFrame) -> pd.DataFrame:
 
         return pd.Series(row_dict)
 
-    # Group by dataset and configuration
+                                        
     agg_df = (
         df.groupby(group_cols, dropna=False)
         .apply(_agg_group, include_groups=False)
         .reset_index()
     )
 
-    # Compute descriptive within-dataset ranks with average tie handling
+                                                                        
     ranked_chunks: list[pd.DataFrame] = []
     for ds in agg_df["dataset"].unique():
         sub = agg_df[agg_df["dataset"] == ds].copy()
-        # Accuracy: descending (highest score is rank 1)
+                                                        
         sub["rank_accuracy"] = sub["pooled_accuracy"].rank(
             ascending=False, method="average"
         )
-        # Efficiency: ascending (lowest runtime is rank 1)
+                                                          
         sub["rank_efficiency"] = sub["mean_efficiency_ms"].rank(
             ascending=True, method="average"
         )
-        # Retention: ascending (lowest retention ratio is rank 1)
+                                                                 
         sub["rank_retention"] = sub["retention_ratio"].rank(
             ascending=True, method="average"
         )
@@ -228,9 +228,9 @@ def find_best_eager_configurations(
     return find_best_configurations(agg_df, top_n=top_n, metric=metric)
 
 
-# ==============================================================================
-# Across-Dataset Friedman Analysis & Critical Difference (Section 4)
-# ==============================================================================
+                                                                                
+                                                                    
+                                                                                
 
 def compute_friedman_statistic(ranks_matrix: np.ndarray) -> dict[str, Any]:
     """Calculate the Friedman test statistic, tie correction, and Iman-Davenport F_F.
@@ -253,15 +253,15 @@ def compute_friedman_statistic(ranks_matrix: np.ndarray) -> dict[str, Any]:
             f"Friedman test requires at least 1 dataset and 2 configurations, got D={D}, M={M}"
         )
 
-    # Average ranks across datasets for each configuration: R[j] = (1/D) * sum(r[j, d])
+                                                                                       
     mean_ranks = np.mean(ranks_matrix, axis=0)
 
-    # Uncorrected Friedman statistic:
-    # chi_F^2 = (12*D / (M*(M+1))) * (sum(R[j]^2) - M*(M+1)^2/4)
+                                     
+                                                                
     ss = float(np.sum(mean_ranks ** 2))
     chi2_uncorrected = float((12.0 * D / (M * (M + 1))) * (ss - M * (M + 1) ** 2 / 4.0))
 
-    # Tie correction: C = 1 - sum(t_k^3 - t_k) / (D * (M^3 - M))
+                                                                
     tie_sum = 0.0
     for d in range(D):
         _, counts = np.unique(ranks_matrix[d], return_counts=True)
@@ -280,8 +280,8 @@ def compute_friedman_statistic(ranks_matrix: np.ndarray) -> dict[str, Any]:
     df_chi2 = int(M - 1)
     p_value_chi2 = float(stats.chi2.sf(chi2_corrected, df_chi2))
 
-    # Iman-Davenport FF statistic:
-    # FF = ((D - 1) * chi_F^2) / (D * (M - 1) - chi_F^2)
+                                  
+                                                        
     df_f1 = int(M - 1)
     df_f2 = int((M - 1) * (D - 1))
     f_denom = float(D * (M - 1) - chi2_corrected)
@@ -296,8 +296,8 @@ def compute_friedman_statistic(ranks_matrix: np.ndarray) -> dict[str, Any]:
         f_stat = float(((D - 1) * chi2_corrected) / f_denom)
         p_value_f = float(stats.f.sf(f_stat, df_f1, df_f2))
 
-    # Nemenyi Critical Difference at alpha = 0.05 and alpha = 0.10:
-    # CD = q_alpha * sqrt(M*(M+1) / (6*D))
+                                                                   
+                                          
     try:
         q_005 = float(stats.studentized_range.ppf(0.95, M, np.inf) / np.sqrt(2))
         q_010 = float(stats.studentized_range.ppf(0.90, M, np.inf) / np.sqrt(2))
@@ -307,7 +307,7 @@ def compute_friedman_statistic(ranks_matrix: np.ndarray) -> dict[str, Any]:
         cd_nemenyi_005 = np.nan
         cd_nemenyi_010 = np.nan
 
-    # Bonferroni-Dunn Critical Difference against a control at alpha = 0.05
+                                                                           
     try:
         q_dunn = float(stats.norm.ppf(1.0 - 0.05 / (2.0 * max(1, M - 1))))
         cd_dunn_005 = float(q_dunn * np.sqrt(M * (M + 1) / (6.0 * D)))
@@ -365,7 +365,7 @@ def compute_friedman_test(
             f"Use single-dataset mode for descriptive leaderboards."
         )
 
-    # Select target score and ranking direction
+                                               
     if metric == "accuracy":
         score_col = "pooled_accuracy" if "pooled_accuracy" in agg_df.columns else "mean_accuracy"
         higher_is_better = True
@@ -378,7 +378,7 @@ def compute_friedman_test(
     else:
         raise ValueError(f"Unknown metric '{metric}'. Expected 'accuracy', 'efficiency', or 'retention'.")
 
-    # Group configurations that exist in all datasets (complete blocks)
+                                                                       
     cfg_id_col = "config_id" if "config_id" in agg_df.columns else "distance_metric"
     cfgs_per_ds = [set(agg_df[agg_df["dataset"] == ds][cfg_id_col]) for ds in datasets]
     common_cfgs = sorted(set.intersection(*cfgs_per_ds))
@@ -391,7 +391,7 @@ def compute_friedman_test(
     filtered = agg_df[agg_df[cfg_id_col].isin(common_cfgs)].copy()
     M = len(common_cfgs)
 
-    # Compute ranks within each dataset
+                                       
     ranks_matrix = np.zeros((D, M), dtype=np.float64)
     scores_matrix = np.zeros((D, M), dtype=np.float64)
 
@@ -400,7 +400,7 @@ def compute_friedman_test(
         scores = ds_sub[score_col].to_numpy()
         scores_matrix[d_idx] = scores
 
-        # Ranks: ascending=False for accuracy (higher score is rank 1), ascending=True for time/storage
+                                                                                                       
         if higher_is_better:
             r = stats.rankdata(-scores, method="average")
         else:
@@ -409,7 +409,7 @@ def compute_friedman_test(
 
     friedman_res = compute_friedman_statistic(ranks_matrix)
 
-    # Two-classifier Wilcoxon signed-ranks test if M == 2 (Section 4 & Demšar 2006)
+                                                                                   
     wilcoxon_stat = np.nan
     wilcoxon_p = np.nan
     if M == 2:
@@ -422,7 +422,7 @@ def compute_friedman_test(
             except Exception:
                 pass
 
-    # Build across-dataset leaderboard table
+                                            
     avg_ranks = friedman_res["mean_ranks"]
     order = np.argsort(avg_ranks)
 
@@ -458,7 +458,7 @@ def compute_friedman_test(
             if mc in row_cfg.index and pd.notna(row_cfg[mc]):
                 row_entry[mc] = row_cfg[mc]
 
-        # Add per-dataset scores and ranks
+                                          
         for d_idx, ds in enumerate(datasets):
             row_entry[f"{ds}_{score_col}"] = float(scores_matrix[d_idx, idx])
             row_entry[f"{ds}_rank"] = float(ranks_matrix[d_idx, idx])
@@ -489,9 +489,9 @@ def compute_friedman_test(
     return friedman_res
 
 
-# ==============================================================================
-# Single-Dataset & Multi-Dataset Evaluation Modes
-# ==============================================================================
+                                                                                
+                                                 
+                                                                                
 
 def evaluate_single_dataset(
     agg_df: pd.DataFrame,
@@ -507,11 +507,11 @@ def evaluate_single_dataset(
     if ds_sub.empty:
         return {}
 
-    # Sort and export Top 10 by Accuracy
+                                        
     top10_acc = ds_sub.sort_values(by="rank_accuracy", ascending=True).head(10).reset_index(drop=True)
     top10_acc.to_csv(out_path / "top10_accuracy.csv", index=False)
 
-    # Sort and export Top 10 by Efficiency
+                                          
     top10_eff = ds_sub.sort_values(by="rank_efficiency", ascending=True).head(10).reset_index(drop=True)
     top10_eff.to_csv(out_path / "top10_efficiency.csv", index=False)
 
@@ -520,7 +520,7 @@ def evaluate_single_dataset(
         "top10_efficiency": top10_eff,
     }
 
-    # If instance reduction is performed or retention varies, export Top 10 by Retention Ratio
+                                                                                              
     if is_reduction or ds_sub["retention_ratio"].nunique() > 1:
         top10_ret = ds_sub.sort_values(by="rank_retention", ascending=True).head(10).reset_index(drop=True)
         top10_ret.to_csv(out_path / "top10_retention.csv", index=False)
@@ -552,21 +552,21 @@ def evaluate_multi_dataset(
 
     results: dict[str, Any] = {}
 
-    # 1. Friedman Test for Accuracy
+                                   
     f_acc = compute_friedman_test(agg_df, metric="accuracy")
     results["accuracy_test"] = f_acc
     top10_acc = f_acc["rankings_df"].head(10).reset_index(drop=True)
     top10_acc.to_csv(out_path / "top10_accuracy.csv", index=False)
     results["top10_accuracy"] = top10_acc
 
-    # 2. Friedman Test for Efficiency / Solving Time
+                                                    
     f_eff = compute_friedman_test(agg_df, metric="efficiency")
     results["efficiency_test"] = f_eff
     top10_eff = f_eff["rankings_df"].head(10).reset_index(drop=True)
     top10_eff.to_csv(out_path / "top10_efficiency.csv", index=False)
     results["top10_efficiency"] = top10_eff
 
-    # 3. Friedman Test for Retention Ratio (if instance reduction is active or retention varies)
+                                                                                                
     if is_reduction or agg_df["retention_ratio"].nunique() > 1:
         try:
             f_ret = compute_friedman_test(agg_df, metric="retention")
@@ -602,9 +602,9 @@ def evaluate_multi_dataset(
     return results
 
 
-# ==============================================================================
-# Master Export Routines
-# ==============================================================================
+                                                                                
+                        
+                                                                                
 
 def export_evaluation_report(
     results_df: pd.DataFrame,
@@ -617,7 +617,7 @@ def export_evaluation_report(
     agg_df = aggregate_experiment_results(results_df)
     agg_df.to_csv(out_path / "aggregated_results.csv", index=False)
 
-    # Check whether instance reduction is evaluated
+                                                   
     is_reduction = False
     if "reduction_method" in results_df.columns:
         valid_reds = results_df["reduction_method"].dropna().astype(str).str.lower()
@@ -627,13 +627,13 @@ def export_evaluation_report(
     eval_dict: dict[str, Any] = {}
 
     if len(unique_datasets) == 1:
-        # Single-dataset mode
+                             
         ds_name = unique_datasets[0]
         eval_dict = evaluate_single_dataset(
             agg_df, dataset_name=ds_name, output_dir=out_path, is_reduction=is_reduction
         )
     else:
-        # Multi-dataset scenario: Friedman test
+                                               
         eval_dict = evaluate_multi_dataset(
             agg_df, output_dir=out_path, is_reduction=is_reduction
         )
@@ -691,9 +691,9 @@ def generate_eager_statistical_comparisons(
     return generate_statistical_comparisons(results_df, output_dir)
 
 
-# ==============================================================================
-# Model Baseline & Assignment Stage Comparisons (Stages D, E, F)
-# ==============================================================================
+                                                                                
+                                                                
+                                                                                
 
 def compare_with_knn_baseline(
     eager_results_df: pd.DataFrame,
@@ -806,7 +806,7 @@ def evaluate_stage_d_comparison(
 
     best_rows: list[dict[str, Any]] = []
 
-    # Collect best configuration per family and dataset
+                                                       
     datasets = sorted(
         set(agg_knn["dataset"]).intersection(set(agg_svm["dataset"])).intersection(set(agg_rf["dataset"]))
     )
@@ -831,7 +831,7 @@ def evaluate_stage_d_comparison(
 
     friedman_results: dict[str, Any] = {}
     if len(datasets) >= 2:
-        # Run Friedman across the 3 best-of-family configurations (M=3)
+                                                                       
         ranks_acc = np.zeros((len(datasets), 3))
         ranks_eff = np.zeros((len(datasets), 3))
         for d_idx, ds in enumerate(datasets):
@@ -950,9 +950,9 @@ def evaluate_stage_f_eager_reduction(
     return out_df
 
 
-# ==============================================================================
-# Helper: Experiment Directory Auto-Versioning
-# ==============================================================================
+                                                                                
+                                              
+                                                                                
 
 def get_next_experiment_dir(base_results_dir: str | Path = "results") -> Path:
     """Find the next experiment directory: {base_results_dir}/experiment_results_{N}."""
