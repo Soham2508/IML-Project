@@ -222,10 +222,6 @@ class ExperimentsTests(unittest.TestCase):
 
     def test_tie_handling_exact_hand_calculated(self) -> None:
         """Verify tie correction against exact hand-calculated 3x3 rank matrix."""
-        # Dataset 1: ranks [1, 2.5, 2.5]
-        # Dataset 2: ranks [2, 2, 2]
-        # Dataset 3: ranks [1, 2, 3]
-        # Hand-calculated: chi2_uncorr = 13/6, C = 7/12, chi2_corr = 26/7 ~= 3.7142857
         ranks_matrix = np.array([
             [1.0, 2.5, 2.5],
             [2.0, 2.0, 2.0],

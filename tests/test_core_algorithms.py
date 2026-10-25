@@ -189,16 +189,11 @@ class CoreAlgorithmsTests(unittest.TestCase):
             retention_policy=DifferentClass(),
         )
         knn_dc.fit(X_train, y_train)
-        # Query 1.0 is near 0.0 -> predicts classA. True label is classB (incorrect -> retained)
-        # Query 9.0 is near 10.0 -> predicts classB. True label is classB (correct -> NOT retained)
         res_dc = knn_dc.evaluate(np.array([[1.0], [9.0]]), ["classB", "classB"])
         self.assertEqual(res_dc["final_size"], 3)
 
         # 4. Oblivion by Goodness:
-        # Initial G_0 = 0.5.
-        # Query nearest to neighbor 0.
-        # If neighbor 0 predicts incorrectly (r=0):
-        # G_1 = 0.5 + 0.2*(0 - 0.5) = 0.4 < 0.5 -> Neighbor 0 must be removed!
+
         knn_og = KNNClassifier(
             k=1,
             distance_metric=EuclideanDistance(),

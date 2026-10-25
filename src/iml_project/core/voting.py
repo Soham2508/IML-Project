@@ -103,15 +103,7 @@ class MajorityVoting(VotingStrategy):
 
 
 class InverseDistanceWeightedVoting(VotingStrategy):
-    """Inverse Distance Weighted voting scheme.
-
-    Vote(y_j) = sum_{c=1}^k (1 / (d(q, x_c)^p)) * 1(y_j, y_c)
-    Typically p = 1.
-
-    Zero-distance handling:
-      If one or more neighbors have d == 0, only zero-distance neighbors participate
-      in the vote (majority among exact matches), avoiding division-by-zero or inf.
-    """
+    """Inverse-distance voting; zero-distance neighbours, if any, decide alone."""
 
     def __init__(self, p: float = 1.0) -> None:
         if p <= 0:
