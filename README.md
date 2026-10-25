@@ -12,7 +12,6 @@
 - **Python Version:** `3.11.9` (compatible with Python 3.11+)
 - **Tested Operating Systems:**
   - Windows 11 (tested in PowerShell and Command Prompt)
-  - Linux (tested in Bash / Zsh)
   - macOS (tested in Zsh)
 - **Hardware Requirements:** Standard multi-core CPU (e.g., Intel/AMD x86_64 or Apple Silicon ARM64). No GPU or specialized accelerator hardware is required.
 - **Software Requirements:** Python 3.11+ and standard `pip` package manager. All external libraries are documented in `requirements.txt`.
