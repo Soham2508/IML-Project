@@ -1,0 +1,11 @@
+rank,config_id,average_rank,model,model_family,distance_metric,k,voting_strategy,retention_policy,reduction_method,reduction_distance,grid_pooled_accuracy,grid_rank,heart-statlog_pooled_accuracy,heart-statlog_rank,kernel,C,gamma,n_estimators,criterion
+1,knn_metric=manhattan_k=15_vote=inverse_distance_ret=ar,10.0,knn,knn,manhattan,15.0,inverse_distance,ar,none,euclidean,0.9804025423728814,5.0,0.8444444444444444,15.0,,,,,
+2,knn_metric=heom_k=9_vote=inverse_distance_ret=ar,22.75,knn,knn,heom,9.0,inverse_distance,ar,none,euclidean,0.9798728813559322,6.5,0.8407407407407408,39.0,,,,,
+3,knn_metric=heom_k=7_vote=inverse_distance_ret=og,23.0,knn,knn,heom,7.0,inverse_distance,og,none,euclidean,0.9782838983050848,31.0,0.8444444444444444,15.0,,,,,
+4,knn_metric=manhattan_k=15_vote=inverse_distance_ret=dc,23.0,knn,knn,manhattan,15.0,inverse_distance,dc,none,euclidean,0.9782838983050848,31.0,0.8444444444444444,15.0,,,,,
+5,knn_metric=manhattan_k=9_vote=inverse_distance_ret=ar,26.5,knn,knn,manhattan,9.0,inverse_distance,ar,none,euclidean,0.9772245762711864,49.0,0.8481481481481481,4.0,,,,,
+6,knn_metric=heom_k=9_vote=inverse_distance_ret=og,35.0,knn,knn,heom,9.0,inverse_distance,og,none,euclidean,0.9782838983050848,31.0,0.8407407407407408,39.0,,,,,
+7,knn_metric=manhattan_k=15_vote=inverse_distance_ret=nr,35.0,knn,knn,manhattan,15.0,inverse_distance,nr,none,euclidean,0.9782838983050848,31.0,0.8407407407407408,39.0,,,,,
+8,knn_metric=heom_k=9_vote=inverse_distance_ret=dc,35.0,knn,knn,heom,9.0,inverse_distance,dc,none,euclidean,0.9782838983050848,31.0,0.8407407407407408,39.0,,,,,
+9,knn_metric=euclidean_k=9_vote=inverse_distance_ret=og,35.0,knn,knn,euclidean,9.0,inverse_distance,og,none,euclidean,0.9782838983050848,31.0,0.8407407407407408,39.0,,,,,
+10,knn_metric=heom_k=9_vote=inverse_distance_ret=nr,35.0,knn,knn,heom,9.0,inverse_distance,nr,none,euclidean,0.9782838983050848,31.0,0.8407407407407408,39.0,,,,,
