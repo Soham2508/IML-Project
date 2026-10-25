@@ -139,7 +139,6 @@ def load_dataset_fold(
             f"Train/test columns differ for dataset '{dataset_name}' fold {fold_index}."
         )
 
-    # Strictly align test_df column ordering to match train_df column ordering
     test_df = test_df[train_df.columns].copy()
 
     target_name = train_df.columns[-1]

@@ -70,7 +70,6 @@ class CanberraDistance(DistanceMetric):
         y_flt = y.astype(np.float64)
         num = np.abs(x_flt - y_flt)
         denom = np.abs(x_flt) + np.abs(y_flt)
-        # Handle 0/0 -> 0.0
         mask = denom > 1e-15
         terms = np.zeros_like(num)
         terms[mask] = num[mask] / denom[mask]
@@ -145,11 +144,9 @@ class HEOMDistance(DistanceMetric):
     def compute(self, x: np.ndarray, y: np.ndarray) -> float:
         total_sq = 0.0
 
-        # Numeric features
         if self.numeric_indices:
             x_num = x[self.numeric_indices].astype(np.float64)
             y_num = y[self.numeric_indices].astype(np.float64)
-            # Check NaN/missing
             x_nan = np.isnan(x_num)
             y_nan = np.isnan(y_num)
             missing = x_nan | y_nan
@@ -158,7 +155,6 @@ class HEOMDistance(DistanceMetric):
             diff[missing] = 1.0
             total_sq += float(np.sum(diff * diff))
 
-        # Nominal features
         if self.nominal_indices:
             x_nom = x[self.nominal_indices]
             y_nom = y[self.nominal_indices]
@@ -232,7 +228,6 @@ class IVDMDistance(DistanceMetric):
         self.classes_ = sorted(set(y_train))
         n_classes = len(self.classes_)
         class_to_idx = {c: i for i, c in enumerate(self.classes_)}
-        # n_samples = len(y_train)
 
         # Fit nominal conditional probabilities P(C | f = val)
         self.nominal_probs_ = {}
@@ -256,7 +251,6 @@ class IVDMDistance(DistanceMetric):
         self.numeric_bin_probs_ = {}
         for idx in self.numeric_indices:
             col_vals = X_train[:, idx].astype(np.float64)
-            # Create quantiles/bins
             quantiles = np.linspace(0, 1, self.n_bins + 1)
             edges = np.unique(np.quantile(col_vals, quantiles))
             if len(edges) < 2:
@@ -323,7 +317,6 @@ class IVDMDistance(DistanceMetric):
         for idx in self.nominal_indices:
             q_prob = self._get_nominal_prob(idx, query[idx])
             attr_map = self.nominal_probs_.get(idx, {})
-            # Look up train row probabilities
             col_vals = train_matrix[:, idx]
             train_probs = np.array(
                 [attr_map.get(v, np.ones(n_classes) / n_classes) for v in col_vals]
