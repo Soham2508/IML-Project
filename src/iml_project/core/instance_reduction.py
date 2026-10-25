@@ -146,38 +146,10 @@ class InstanceReducer(ABC):
 
 
 class FCNN3(InstanceReducer):
-    """Fast Condensed Nearest Neighbor 3 (FCNN3) algorithm.
-
-    FCNN3 constructs a reduced training subset S that is training-set-consistent
-    for the 1-nearest-neighbor rule. At each iteration, it selects the instance
-    p* in S with the largest number of Voronoi enemies (opposing-class examples
-    in its Voronoi cell), and adds the enemy q* nearest to p* into S.
-
-    Reference
-    ---------
-    Fabrizio Angiulli, "Fast Nearest Neighbor Condensation for Large Data Sets
-    Classification," IEEE Transactions on Knowledge and Data Engineering,
-    vol. 19, no. 11, pp. 1450-1464, Nov. 2007.
-    """
+    """FCNN3 condensation for 1-NN (Angiulli, 2007)."""
 
     def fit_resample(self, X: Any, y: Any) -> tuple[Any, Any]:
-        """
-        Reduce the training instances using FCNN3.
-
-        Parameters
-        ----------
-        X : array-like or pd.DataFrame of shape (n_samples, n_features)
-            Training feature vectors.
-        y : array-like or pd.Series of shape (n_samples,)
-            Categorical target labels.
-
-        Returns
-        -------
-        X_reduced : array-like or pd.DataFrame
-            Reduced feature vectors.
-        y_reduced : array-like, pd.Series, or list
-            Reduced target labels.
-        """
+        """Return the FCNN3-reduced training set."""
         X_arr, y_arr, early_return = self._prepare_inputs(X, y)
         if early_return is not None:
             return early_return
@@ -281,40 +253,10 @@ class FCNN3(InstanceReducer):
 
 
 class RNG2(InstanceReducer):
-    """Relative Neighbourhood Graph 2nd-order editing (RNG2 / RNGE-2).
-
-    RNG2 is an editing method based on proximity graphs. It constructs the
-    Relative Neighbourhood Graph (RNG) on the training set and removes an instance
-    if and only if:
-      1. First-order test: Its immediate RNG neighbours misclassify it via majority vote.
-      2. Second-order test: A strict majority of the expanded graph neighbourhood
-         surrounding the instance and its same-class RNG neighbours belongs to other classes.
-
-    Reference
-    ---------
-    J. S. Sánchez, F. Pla, and F. J. Ferri, "Prototype selection for the
-    nearest neighbour rule through proximity graphs," Pattern Recognition
-    Letters, vol. 18, pp. 507-513, 1997.
-    """
+    """RNG2 editing with the Relative Neighbourhood Graph (Sánchez et al., 1997)."""
 
     def fit_resample(self, X: Any, y: Any) -> tuple[Any, Any]:
-        """
-        Reduce the training instances using RNG2 editing.
-
-        Parameters
-        ----------
-        X : array-like or pd.DataFrame of shape (n_samples, n_features)
-            Training feature vectors.
-        y : array-like or pd.Series of shape (n_samples,)
-            Categorical target labels.
-
-        Returns
-        -------
-        X_reduced : array-like or pd.DataFrame
-            Edited feature vectors.
-        y_reduced : array-like, pd.Series, or list
-            Edited target labels.
-        """
+        """Return the RNG2-edited training set."""
         X_arr, y_arr, early_return = self._prepare_inputs(X, y)
         if early_return is not None:
             return early_return
@@ -382,21 +324,7 @@ RNGE2 = RNG2
 
 
 class DROP3(InstanceReducer):
-    """Decremental Reduction Optimization Procedure 3 (DROP3).
-
-    DROP3 is an instance reduction method consisting of two phases:
-      1. Phase I (Noise filtering): Remove instances misclassified by their
-         k-nearest neighbours in S using an ENN-style leave-one-out rule.
-      2. Phase II (Ordered reduction): Sort surviving instances in descending
-         order of distance to their nearest enemy, then remove each candidate
-         if doing so does not decrease the number of its associates in T
-         that are classified correctly.
-
-    Reference
-    ---------
-    D. R. Wilson and T. R. Martinez, "Reduction Techniques for Instance-Based
-    Learning Algorithms," Machine Learning, vol. 38, no. 3, pp. 257-286, 2000.
-    """
+    """DROP3 hybrid reduction (Wilson & Martinez, 2000)."""
 
     def __init__(
         self,
@@ -409,23 +337,7 @@ class DROP3(InstanceReducer):
         self.k = k
 
     def fit_resample(self, X: Any, y: Any) -> tuple[Any, Any]:
-        """
-        Reduce the training instances using DROP3.
-
-        Parameters
-        ----------
-        X : array-like or pd.DataFrame of shape (n_samples, n_features)
-            Training feature vectors.
-        y : array-like or pd.Series of shape (n_samples,)
-            Categorical target labels.
-
-        Returns
-        -------
-        X_reduced : array-like or pd.DataFrame
-            Reduced feature vectors.
-        y_reduced : array-like, pd.Series, or list
-            Reduced target labels.
-        """
+        """Return the DROP3-reduced training set."""
         X_arr, y_arr, early_return = self._prepare_inputs(X, y)
         if early_return is not None:
             return early_return
@@ -536,13 +448,7 @@ def get_instance_reducer(
     distance_metric: DistanceMetric | str | None = None,
     **kwargs: Any,
 ) -> InstanceReducer:
-    """Factory function returning an instance of the requested instance reduction algorithm.
-
-    Supported methods:
-      - 'fcnn3', 'fcnn' -> FCNN3
-      - 'rng2', 'rnge2', 'rnge' -> RNG2
-      - 'drop3', 'drop' -> DROP3
-    """
+    """Return the instance reducer for the given name (fcnn3, rng2 or drop3)."""
     normalized = name.strip().lower().replace("-", "").replace("_", "")
     if normalized in {"fcnn3", "fcnn"}:
         return FCNN3(distance_metric=distance_metric)

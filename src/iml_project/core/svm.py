@@ -20,33 +20,7 @@ def svmAlgorithm(
     gamma: str | float = "scale",
     random_state: int = 42,
 ) -> dict[str, Any]:
-    """Support Vector Machine classification algorithm using scikit-learn's SVC.
-
-    Parameters
-    ----------
-    train_matrix : np.ndarray
-        Training feature matrix (n_train, n_features).
-    train_labels : Sequence[Any]
-        Training target labels.
-    test_matrix : np.ndarray
-        Test feature matrix (n_test, n_features).
-    test_labels : Sequence[Any]
-        Test target labels.
-    kernel : str, default="linear"
-        Specifies the kernel type to be used in the algorithm ('linear', 'rbf', etc.).
-    C : float, default=1.0
-        Regularization parameter (strictly positive).
-    gamma : str | float, default="scale"
-        Kernel coefficient for 'rbf', 'poly' and 'sigmoid'. Can be 'scale', 'auto', or a float.
-        Note: For 'linear' kernel, gamma is ignored by the underlying libsvm implementation.
-    random_state : int, default=42
-        Random state for pseudo-random number generator.
-
-    Returns
-    -------
-    dict[str, Any]
-        Dictionary containing evaluation metrics, timings, and predictions.
-    """
+    """Train an SVM on the training fold and return its test-fold results."""
     if C <= 0:
         raise ValueError(f"C must be strictly positive, got {C}")
 

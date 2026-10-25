@@ -103,15 +103,7 @@ class DifferentClass(RetentionPolicy):
 
 
 class OblivionByGoodness(RetentionPolicy):
-    """Oblivion by Goodness (OG):
-
-    - Case goodness initialized to G_0 = 0.5.
-    - Retrieved k neighbors update goodness based on reward:
-        r(c) = 1 if class(c) == class(q) else 0
-        G_t(c) = G_{t-1}(c) + alpha * (r(c) - G_{t-1}(c)), alpha = 0.2
-    - A case is removed whenever G_t(c) < 0.5.
-    - If retain_solved=True, newly retained cases inherit initial goodness G_0 = 0.5.
-    """
+    """Oblivion by Goodness: remove a case once its goodness falls below 0.5."""
 
     def __init__(
         self,

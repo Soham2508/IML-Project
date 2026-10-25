@@ -21,34 +21,7 @@ def rfAlgorithm(
     random_state: int = 42,
     n_jobs: int = -1,
 ) -> dict[str, Any]:
-    """Random Forest classification algorithm using scikit-learn's RandomForestClassifier.
-
-    Parameters
-    ----------
-    train_matrix : np.ndarray
-        Training feature matrix (n_train, n_features).
-    train_labels : Sequence[Any]
-        Training target labels.
-    test_matrix : np.ndarray
-        Test feature matrix (n_test, n_features).
-    test_labels : Sequence[Any]
-        Test target labels.
-    n_estimators : int, default=100
-        The number of trees in the forest (strictly positive integer).
-    criterion : str, default="gini"
-        The function to measure the quality of a split ('gini', 'entropy', or 'log_loss').
-    max_depth : int | None, default=None
-        The maximum depth of the tree. If None, nodes are expanded until all leaves are pure.
-    random_state : int, default=42
-        Controls the randomness of the bootstrapping and feature splitting.
-    n_jobs : int, default=-1
-        The number of jobs to run in parallel. -1 means using all processors.
-
-    Returns
-    -------
-    dict[str, Any]
-        Dictionary containing evaluation metrics, timings, and predictions.
-    """
+    """Train a Random Forest on the training fold and return its test-fold results."""
     if n_estimators <= 0:
         raise ValueError(f"n_estimators must be strictly positive, got {n_estimators}")
     if criterion not in {"gini", "entropy", "log_loss"}:
