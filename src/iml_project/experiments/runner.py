@@ -32,6 +32,7 @@ class ExperimentConfig:
     retention_policy: str
     reduction_method: str = "none"
     reduction_distance: str = "none"
+    model: str = "knn"
 
 
 @dataclass
@@ -57,6 +58,59 @@ class ExperimentResult:
     f1_macro: float = 0.0
     reduction_method: str = "none"
     reduction_distance: str = "none"
+    model: str = "knn"
+    model_family: str = "knn"
+    config_id: str = ""
+    training_size_before_reduction: int = 0
+    retained_size: int = 0
+    fit_time: float = 0.0
+
+
+def build_config_id(
+    model: str,
+    *,
+    distance_metric: str | None = None,
+    k: int | None = None,
+    voting_strategy: str | None = None,
+    retention_policy: str | None = None,
+    kernel: str | None = None,
+    C: float | None = None,
+    gamma: Any = None,
+    n_estimators: int | None = None,
+    criterion: str | None = None,
+    max_depth: int | None = None,
+    reduction_method: str | None = None,
+    reduction_distance: str | None = None,
+) -> str:
+    """Construct a concise, deterministic identifier for a model configuration."""
+    m = model.lower()
+    if m == "knn":
+        parts = [
+            f"knn_metric={distance_metric}",
+            f"k={k}",
+            f"vote={voting_strategy}",
+            f"ret={retention_policy}",
+        ]
+    elif m == "svm":
+        parts = [
+            f"svm_kernel={kernel}",
+            f"C={C}",
+            f"gamma={gamma}",
+        ]
+    elif m == "rf":
+        parts = [
+            f"rf_n={n_estimators}",
+            f"criterion={criterion}",
+            f"depth={max_depth}",
+        ]
+    else:
+        parts = [f"{m}"]
+
+    red = str(reduction_method).lower() if reduction_method else "none"
+    if red != "none":
+        parts.append(f"red={red}_{reduction_distance or 'euclidean'}")
+
+    return "_".join(parts)
 
 
 def prepare_fold_data(
@@ -193,6 +247,9 @@ def run_single_experiment(
     data_root: str | Path = "data",
 ) -> ExperimentResult:
     """Run a single fold experiment configuration with strict state isolation."""
+    train_df_raw, _, _, _, _ = load_dataset_fold(config.dataset, config.fold, data_root)
+    train_size_before = len(train_df_raw)
+
     X_train, y_train, X_test, y_test, metric = prepare_fold_data(
         config.dataset,
         config.fold,
@@ -215,6 +272,20 @@ def run_single_experiment(
     classifier.fit(X_train, y_train)
     eval_metrics = classifier.evaluate(X_test, y_test)
 
+    retained_size = eval_metrics["final_size"]
+    retention_ratio = (
+        retained_size / train_size_before if train_size_before > 0 else 1.0
+    )
+    cid = build_config_id(
+        "knn",
+        distance_metric=config.distance_metric,
+        k=config.k,
+        voting_strategy=config.voting_strategy,
+        retention_policy=config.retention_policy,
+        reduction_method=config.reduction_method,
+        reduction_distance=config.reduction_distance,
+    )
+
     return ExperimentResult(
         dataset=config.dataset,
         fold=config.fold,
@@ -232,11 +303,17 @@ def run_single_experiment(
         total=eval_metrics["total"],
         initial_size=eval_metrics["initial_size"],
         final_size=eval_metrics["final_size"],
-        retention_ratio=eval_metrics["retention_ratio"],
+        retention_ratio=retention_ratio,
         mean_prediction_time=eval_metrics["mean_prediction_time"],
         total_prediction_time=eval_metrics["total_prediction_time"],
-        reduction_method=config.reduction_method,
-        reduction_distance=config.reduction_distance,
+        reduction_method=config.reduction_method or "none",
+        reduction_distance=config.reduction_distance or "none",
+        model="knn",
+        model_family="knn",
+        config_id=cid,
+        training_size_before_reduction=train_size_before,
+        retained_size=retained_size,
+        fit_time=0.0,
     )
 
 
@@ -279,6 +356,9 @@ def run_experiment_matrix(
     for ds in datasets:
         ds_results: list[dict[str, Any]] = []
         for fold in folds:
+            train_df_raw, _, _, _, _ = load_dataset_fold(ds, fold, data_root)
+            train_size_before = len(train_df_raw)
+
             for dist in distances:
                 # Prepare fold data once per (ds, fold, dist) to optimize speed
                 X_tr, y_tr, X_te, y_te, metric = prepare_fold_data(
@@ -306,13 +386,36 @@ def run_experiment_matrix(
                     clf.fit(X_tr, y_tr)
                     res = clf.evaluate(X_te, y_te)
 
+                    retained_size = res["final_size"]
+                    retention_ratio = (
+                        retained_size / train_size_before if train_size_before > 0 else 1.0
+                    )
+                    cid = build_config_id(
+                        "knn",
+                        distance_metric=dist,
+                        k=k,
+                        voting_strategy=vote,
+                        retention_policy=ret,
+                        reduction_method=reduction_method,
+                        reduction_distance=reduction_distance,
+                    )
+
                     row = {
                         "dataset": ds,
                         "fold": fold,
+                        "model": "knn",
+                        "model_family": "knn",
+                        "config_id": cid,
                         "distance_metric": dist,
                         "k": k,
                         "voting_strategy": vote,
                         "retention_policy": ret,
+                        "kernel": None,
+                        "C": None,
+                        "gamma": None,
+                        "n_estimators": None,
+                        "criterion": None,
+                        "max_depth": None,
                         "reduction_method": reduction_method or "none",
                         "reduction_distance": reduction_distance or "none",
                         "accuracy": res["accuracy"],
@@ -323,9 +426,12 @@ def run_experiment_matrix(
                         "correct": res["correct"],
                         "incorrect": res["incorrect"],
                         "total": res["total"],
+                        "training_size_before_reduction": train_size_before,
+                        "retained_size": retained_size,
                         "initial_size": res["initial_size"],
                         "final_size": res["final_size"],
-                        "retention_ratio": res["retention_ratio"],
+                        "retention_ratio": retention_ratio,
+                        "fit_time": 0.0,
                         "mean_prediction_time": res["mean_prediction_time"],
                         "total_prediction_time": res["total_prediction_time"],
                     }
@@ -369,12 +475,19 @@ def run_svm_experiments(
     for ds in datasets:
         ds_results: list[dict[str, Any]] = []
         for fold in folds:
+            train_df_raw, _, _, _, _ = load_dataset_fold(ds, fold, data_root)
+            train_size_before = len(train_df_raw)
+
             X_tr, y_tr, X_te, y_te = prepare_eager_fold_data(
                 ds,
                 fold,
                 data_root=data_root,
                 reduction_method=reduction_method,
                 reduction_distance=reduction_distance,
+            )
+            retained_size = len(X_tr)
+            retention_ratio = (
+                retained_size / train_size_before if train_size_before > 0 else 1.0
             )
 
             for kernel in kernels:
@@ -389,18 +502,33 @@ def run_svm_experiments(
                     random_state=random_state,
                 )
 
+                cid = build_config_id(
+                    "svm",
+                    kernel=kernel,
+                    C=C,
+                    gamma=gamma,
+                    reduction_method=reduction_method,
+                    reduction_distance=reduction_distance,
+                )
+
                 row = {
                     "dataset": ds,
                     "fold": fold,
                     "model": "svm",
+                    "model_family": "svm",
+                    "config_id": cid,
+                    "distance_metric": None,
+                    "k": None,
+                    "voting_strategy": None,
+                    "retention_policy": None,
                     "kernel": kernel,
                     "C": C,
                     "gamma": str(gamma),
-                    "reduction_method": reduction_method or "none",
-                    "reduction_distance": reduction_distance or "none",
                     "n_estimators": None,
                     "criterion": None,
                     "max_depth": None,
+                    "reduction_method": reduction_method or "none",
+                    "reduction_distance": reduction_distance or "none",
                     "accuracy": res["accuracy"],
                     "balanced_accuracy": res["balanced_accuracy"],
                     "precision_macro": res["precision_macro"],
@@ -409,12 +537,14 @@ def run_svm_experiments(
                     "correct": res["correct"],
                     "incorrect": res["incorrect"],
                     "total": res["total"],
+                    "training_size_before_reduction": train_size_before,
+                    "retained_size": retained_size,
+                    "initial_size": train_size_before,
+                    "final_size": retained_size,
+                    "retention_ratio": retention_ratio,
                     "fit_time": res["fit_time"],
                     "mean_prediction_time": res["mean_prediction_time"],
                     "total_prediction_time": res["total_prediction_time"],
-                    "initial_size": res["initial_size"],
-                    "final_size": res["final_size"],
-                    "retention_ratio": res["retention_ratio"],
                 }
                 results.append(row)
                 ds_results.append(row)
@@ -457,12 +587,19 @@ def run_rf_experiments(
     for ds in datasets:
         ds_results: list[dict[str, Any]] = []
         for fold in folds:
+            train_df_raw, _, _, _, _ = load_dataset_fold(ds, fold, data_root)
+            train_size_before = len(train_df_raw)
+
             X_tr, y_tr, X_te, y_te = prepare_eager_fold_data(
                 ds,
                 fold,
                 data_root=data_root,
                 reduction_method=reduction_method,
                 reduction_distance=reduction_distance,
+            )
+            retained_size = len(X_tr)
+            retention_ratio = (
+                retained_size / train_size_before if train_size_before > 0 else 1.0
             )
 
             for n_est, crit in itertools.product(n_estimators_list, criteria_list):
@@ -478,18 +615,33 @@ def run_rf_experiments(
                     n_jobs=n_jobs,
                 )
 
+                cid = build_config_id(
+                    "rf",
+                    n_estimators=n_est,
+                    criterion=crit,
+                    max_depth=max_depth,
+                    reduction_method=reduction_method,
+                    reduction_distance=reduction_distance,
+                )
+
                 row = {
                     "dataset": ds,
                     "fold": fold,
                     "model": "rf",
+                    "model_family": "rf",
+                    "config_id": cid,
+                    "distance_metric": None,
+                    "k": None,
+                    "voting_strategy": None,
+                    "retention_policy": None,
                     "kernel": None,
                     "C": None,
                     "gamma": None,
-                    "reduction_method": reduction_method or "none",
-                    "reduction_distance": reduction_distance or "none",
                     "n_estimators": n_est,
                     "criterion": crit,
                     "max_depth": max_depth,
+                    "reduction_method": reduction_method or "none",
+                    "reduction_distance": reduction_distance or "none",
                     "accuracy": res["accuracy"],
                     "balanced_accuracy": res["balanced_accuracy"],
                     "precision_macro": res["precision_macro"],
@@ -498,12 +650,14 @@ def run_rf_experiments(
                     "correct": res["correct"],
                     "incorrect": res["incorrect"],
                     "total": res["total"],
+                    "training_size_before_reduction": train_size_before,
+                    "retained_size": retained_size,
+                    "initial_size": train_size_before,
+                    "final_size": retained_size,
+                    "retention_ratio": retention_ratio,
                     "fit_time": res["fit_time"],
                     "mean_prediction_time": res["mean_prediction_time"],
                     "total_prediction_time": res["total_prediction_time"],
-                    "initial_size": res["initial_size"],
-                    "final_size": res["final_size"],
-                    "retention_ratio": res["retention_ratio"],
                 }
                 results.append(row)
                 ds_results.append(row)

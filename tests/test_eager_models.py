@@ -185,13 +185,16 @@ class TestEagerEvaluation(unittest.TestCase):
     def test_aggregate_and_best_eager_results(self) -> None:
         agg = aggregate_eager_results(self.svm_df, "svm")
         self.assertEqual(len(agg), 2)
+        self.assertIn("pooled_accuracy", agg.columns)
         self.assertIn("mean_accuracy", agg.columns)
         self.assertIn("mean_balanced_accuracy", agg.columns)
         self.assertIn("mean_f1_macro", agg.columns)
         self.assertIn("mean_fit_time_s", agg.columns)
+        self.assertIn("rank_accuracy", agg.columns)
 
         best = find_best_eager_configurations(agg, top_n=1)
         self.assertEqual(len(best), 1)
+        # Higher accuracy kernel gets rank 1
         self.assertEqual(best.iloc[0]["kernel"], "linear")
 
     def test_generate_eager_statistical_comparisons(self) -> None:
@@ -199,10 +202,10 @@ class TestEagerEvaluation(unittest.TestCase):
             stat_df = generate_eager_statistical_comparisons(
                 self.svm_df, "svm", tmp_dir
             )
-            self.assertEqual(len(stat_df), 1)
-            self.assertEqual(stat_df.iloc[0]["comparison"], "Rbf_vs_Linear")
-            self.assertEqual(stat_df.iloc[0]["n_pairs"], 10)
-            self.assertIn("p_value", stat_df.columns)
+            self.assertFalse(stat_df.empty)
+            # In single-dataset mode, summary report is produced
+            self.assertIn("mode", stat_df.columns)
+            self.assertEqual(stat_df.iloc[0]["mode"], "single_dataset")
 
     def test_compare_with_knn_baseline(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -218,11 +221,17 @@ class TestEagerEvaluation(unittest.TestCase):
                     "voting_strategy": "majority",
                     "retention_policy": "nr",
                     "accuracy": 0.7 + 0.01 * f,
+                    "correct": int((0.7 + 0.01 * f) * 100),
+                    "incorrect": int((0.3 - 0.01 * f) * 100),
+                    "total": 100,
                     "balanced_accuracy": 0.7 + 0.01 * f,
                     "precision_macro": 0.7,
                     "recall_macro": 0.7,
                     "f1_macro": 0.7,
                     "mean_prediction_time": 0.002,
+                    "total_prediction_time": 0.2,
+                    "training_size_before_reduction": 900,
+                    "retained_size": 900,
                     "retention_ratio": 1.0,
                 })
             pd.DataFrame(knn_rows).to_csv(
@@ -235,8 +244,9 @@ class TestEagerEvaluation(unittest.TestCase):
             )
             self.assertIsNotNone(comp_df)
             self.assertEqual(len(comp_df), 1)
-            self.assertGreater(comp_df.iloc[0]["mean_diff"], 0)
-            self.assertTrue(comp_df.iloc[0]["significant_005"])
+            self.assertGreater(comp_df.iloc[0]["accuracy_difference"], 0)
+            self.assertEqual(comp_df.iloc[0]["winner_accuracy"], "svm")
+            self.assertIn("speedup_vs_knn", comp_df.columns)
 
 
 class TestCLIValidation(unittest.TestCase):
