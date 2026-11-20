@@ -18,7 +18,7 @@ Work 2 package was changed.
 
 | File | Tests | Covers |
 | --- | --- | --- |
-| `tests/test_dbscan.py` | 27 | Synthetic blobs with outliers, noise = `-1`, 5 `eps` × 4 `min_samples` values, 4 metrics, identical labels across all compatible search algorithms, every metric/algorithm pair checked against scikit-learn, required `metric_params`, invalid parameters and input, unfitted `get_result()`, no input mutation, metadata, signatures |
+| `tests/test_dbscan.py` | 27 | Synthetic blobs with outliers, noise = `-1`, 5 `eps` × 4 `min_samples` values, 4 metrics, identical labels across all compatible search algorithms (euclidean, manhattan, canberra, cosine), every metric/algorithm pair checked against scikit-learn, required `metric_params`, invalid parameters and input, unfitted `get_result()`, no input mutation, metadata, signatures |
 | `tests/test_birch.py` | 16 | Synthetic blobs, grid of 4 `threshold` × 3 `branching_factor` × 4 `n_clusters` values, fewer clusters than requested, `compute_labels=False`, `n_clusters` > `n_samples`, invalid parameters and input, unfitted `get_result()`, no input mutation, metadata, signatures |
 
 Run from the project root (unittest, like the rest of the project):
@@ -64,7 +64,8 @@ print(f"BIRCH: {result.n_clusters} clusters (requested {requested})")
 ## 4. Dependencies
 
 No new dependencies. The modules use `numpy` and `scikit-learn`, both already
-pinned in `requirements.txt` (`numpy==2.4.6`, `scikit-learn==1.9.1`). The
+pinned in `requirements.txt` (`numpy==2.4.6`, `scikit-learn==1.9.1`). Tested
+with Python 3.11.18 on macOS. The
 metric table and the BIRCH notes below were verified against scikit-learn
 1.9.1; `tests/test_dbscan.py` fails if a different version changes which
 metric/algorithm pairs work.
@@ -150,8 +151,12 @@ The public signatures of `DBSCANClusterer` and `BIRCHClusterer` (`__init__`,
 `fit`, `fit_predict`, `get_result`) match section 4 of the work plan exactly:
 parameter names, order, type hints, defaults and return types.
 `test_public_signature_matches_work_plan` in both test files checks this.
-Extra public members (`get_params`, `labels_`, `core_sample_indices_`,
-`subcluster_centers_`, and the DBSCAN helpers) are additions only.
+Extra public members are additions only: `get_params()` and `__repr__` on
+both classes, the fitted attributes `labels_` (both), `core_sample_indices_`
+(DBSCAN) and `subcluster_centers_` (BIRCH), and in `dbscan.py` the helpers
+`compatible_algorithms` and `k_distance_curve` plus the constants
+`METRIC_ALGORITHMS`, `EXCLUDED_METRICS`, `REQUIRED_METRIC_PARAMS`,
+`VALID_ALGORITHMS`, `TREE_ALGORITHMS` and `NOISE_LABEL`.
 
 ## Checklist (work plan 4.3)
 
