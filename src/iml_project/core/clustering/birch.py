@@ -1,31 +1,54 @@
 """BIRCH wrapper around ``sklearn.cluster.Birch`` returning a ``ClusterResult``.
 
 This wrapper adds input and parameter validation, fit timing, int64 labels,
-and conversion to the ``ClusterResult`` contract.
+and conversion to the ``ClusterResult`` contract. The clustering itself is
+scikit-learn's implementation of BIRCH (Zhang et al., 1996); it is not
+reimplemented here.
 
 Notes on scikit-learn 1.9.1 behaviour:
 
-* ``Birch`` no longer has a ``copy`` parameter (removed in 1.8). The ``copy``
-  argument is kept here for the team interface; the wrapper always fits on its
-  own float64 copy, so the caller's array is never modified either way.
-* ``n_clusters`` is the *requested* number of global clusters. BIRCH may
-  produce fewer when the CF-tree has fewer leaf subclusters than requested
-  (scikit-learn emits a ``ConvergenceWarning``). ``ClusterResult.n_clusters``
-  is always the number actually produced; the requested value and any warning
-  are stored in ``metadata``.
+* ``Birch`` has no ``copy`` parameter in scikit-learn 1.9.1. The ``copy``
+  argument is kept here because it is part of the team interface, and it is
+  recorded in ``metadata``, but it has no effect: the wrapper always fits on
+  its own float64 copy, so the caller's array is never modified either way.
+* ``n_clusters`` is the *requested* number of global clusters. When it is an
+  int, scikit-learn groups the CF-tree leaf subclusters with
+  ``AgglomerativeClustering``. BIRCH may produce fewer clusters when the
+  CF-tree has fewer leaf subclusters than requested (scikit-learn emits a
+  ``ConvergenceWarning``). ``ClusterResult.n_clusters`` is always the number
+  actually produced; the requested value and any warning are stored in
+  ``metadata``.
 * With ``n_clusters=None`` the leaf subclusters are returned as-is, so the
   number of clusters is controlled only by ``threshold``/``branching_factor``.
 * With ``compute_labels=False`` scikit-learn does not label the training
-  data, so labels are obtained with ``predict(X)``; that call is included in
-  ``execution_time`` and recorded as ``metadata["labels_source"]``.
+  data, so labels are obtained with ``predict(X)``. In that case
+  ``execution_time`` covers fit + predict instead of fit only, and
+  ``metadata["labels_source"]`` is ``"predict"``. With the default
+  ``compute_labels=True`` it covers the fit only (``labels_source="fit"``).
 
-Usage::
+Usage (runnable from the project root once ``work3.contracts`` exists)::
 
+    import sys
+    sys.path.insert(0, "src")
+
+    from sklearn.datasets import make_blobs
     from iml_project.core.clustering.birch import BIRCHClusterer
 
-    birch = BIRCHClusterer(threshold=0.3, branching_factor=50, n_clusters=3)
-    labels = birch.fit_predict(bundle.X)             # never pass y_true
-    result = birch.get_result()                      # ClusterResult, n_noise = 0
+    X, _ = make_blobs(n_samples=300, centers=3, cluster_std=0.5, random_state=0)
+    birch = BIRCHClusterer(threshold=0.5, branching_factor=50, n_clusters=3)
+    labels = birch.fit_predict(X)  # only X; true labels are never passed
+    result = birch.get_result()  # ClusterResult, n_noise = 0
+    print(result.n_clusters, result.metadata["requested_n_clusters"])
+
+References
+----------
+Zhang, T., Ramakrishnan, R., & Livny, M. (1996). BIRCH: An efficient data
+clustering method for very large databases. In Proceedings of the 1996 ACM
+SIGMOD International Conference on Management of Data, pp. 103-114.
+https://doi.org/10.1145/233269.233324
+
+Pedregosa, F., et al. (2011). Scikit-learn: Machine learning in Python.
+Journal of Machine Learning Research, 12, 2825-2830.
 """
 
 from __future__ import annotations
@@ -198,7 +221,8 @@ class BIRCHClusterer:
     def fit_predict(self, X: npt.NDArray[np.float64]) -> npt.NDArray[np.int64]:
         """Fit on ``X`` and return int64 labels of shape ``(n_samples,)``."""
         self.fit(X)
-        assert self.labels_ is not None
+        if self.labels_ is None:
+            raise RuntimeError("BIRCH fit finished without producing labels.")
         return self.labels_.copy()
 
     def get_result(self) -> ClusterResult:

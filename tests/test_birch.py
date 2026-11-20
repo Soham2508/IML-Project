@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import unittest
 
 import numpy as np
@@ -172,6 +173,42 @@ class BIRCHClustererTests(unittest.TestCase):
         self.assertEqual(
             sum(result.metadata["cluster_sizes"].values()), self.X.shape[0]
         )
+
+    def test_public_signature_matches_work_plan(self) -> None:
+        expected_init = [
+            ("threshold", "float", 0.5),
+            ("branching_factor", "int", 50),
+            ("n_clusters", "int | None", 3),
+            ("compute_labels", "bool", True),
+            ("copy", "bool", True),
+        ]
+        init = inspect.signature(BIRCHClusterer.__init__)
+        params = list(init.parameters.values())[1:]
+        self.assertEqual(
+            [(p.name, p.annotation, p.default) for p in params], expected_init
+        )
+        self.assertEqual(init.return_annotation, "None")
+
+        fit = inspect.signature(BIRCHClusterer.fit)
+        self.assertEqual(list(fit.parameters), ["self", "X"])
+        self.assertEqual(fit.parameters["X"].annotation, "npt.NDArray[np.float64]")
+        self.assertEqual(fit.return_annotation, "BIRCHClusterer")
+
+        fit_predict = inspect.signature(BIRCHClusterer.fit_predict)
+        self.assertEqual(list(fit_predict.parameters), ["self", "X"])
+        self.assertEqual(
+            fit_predict.parameters["X"].annotation, "npt.NDArray[np.float64]"
+        )
+        self.assertEqual(fit_predict.return_annotation, "npt.NDArray[np.int64]")
+
+        get_result = inspect.signature(BIRCHClusterer.get_result)
+        self.assertEqual(list(get_result.parameters), ["self"])
+        self.assertEqual(get_result.return_annotation, "ClusterResult")
+
+    def test_execution_time_is_fit_only_by_default(self) -> None:
+        result = BIRCHClusterer().fit(self.X).get_result()
+        self.assertEqual(result.metadata["labels_source"], "fit")
+        self.assertEqual(result.metadata["parameters"]["copy"], True)
 
 
 if __name__ == "__main__":
